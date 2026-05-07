@@ -202,25 +202,37 @@ def update_transaction(tx_id, fields):
 
 def get_dashboard_data(owner=None, months=6):
     conn = get_db()
-    today = date.today()
-
-    month_list = []
-    for i in range(months - 1, -1, -1):
-        m = today.month - i
-        y = today.year
-        while m <= 0:
-            m += 12; y -= 1
-        month_list.append(f"{y}-{m:02d}")
 
     of = "AND a.owner=?" if (owner and owner != 'ALL') else ""
     op = [owner] if (owner and owner != 'ALL') else []
 
+    # Use the N most recent months that actually have data
+    data_months = conn.execute(f'''
+        SELECT DISTINCT substr(t.date_parsed,1,7) AS month
+        FROM transactions t JOIN accounts a ON a.id=t.account_id
+        WHERE t.is_real_expense=1 AND t.amount>0 AND t.date_parsed IS NOT NULL {of}
+        ORDER BY month DESC LIMIT ?
+    ''', op + [months]).fetchall()
+
+    if data_months:
+        month_list = sorted(r['month'] for r in data_months)
+    else:
+        today = date.today()
+        month_list = []
+        for i in range(months - 1, -1, -1):
+            m = today.month - i
+            y = today.year
+            while m <= 0:
+                m += 12; y -= 1
+            month_list.append(f"{y}-{m:02d}")
+
     trend_rows = conn.execute(f'''
         SELECT substr(t.date_parsed,1,7) AS month, t.category, SUM(t.amount) AS total
         FROM transactions t JOIN accounts a ON a.id=t.account_id
-        WHERE t.is_real_expense=1 AND t.amount>0 AND t.date_parsed>=? {of}
+        WHERE t.is_real_expense=1 AND t.amount>0
+          AND substr(t.date_parsed,1,7) IN ({','.join('?'*len(month_list))}) {of}
         GROUP BY month, t.category
-    ''', [month_list[0] + '-01'] + op).fetchall()
+    ''', month_list + op).fetchall()
 
     trend = {m: {} for m in month_list}
     for r in trend_rows:
