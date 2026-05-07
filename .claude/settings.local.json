@@ -10,7 +10,9 @@
       "Bash(curl -s http://127.0.0.1:8080)",
       "mcp__claude_ai_Notion__notion-update-page",
       "Bash(git *)",
-      "Bash(gh *)"
+      "Bash(gh *)",
+      "Bash(lsof -i :8080)",
+      "Bash(ls -la start.sh app.py .env)"
     ]
   }
 }
