@@ -8,7 +8,9 @@
       "Bash(curl -v http://127.0.0.1:5000)",
       "Bash(pkill -f \"python3 app.py\")",
       "Bash(curl -s http://127.0.0.1:8080)",
-      "mcp__claude_ai_Notion__notion-update-page"
+      "mcp__claude_ai_Notion__notion-update-page",
+      "Bash(git *)",
+      "Bash(gh *)"
     ]
   }
 }
