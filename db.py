@@ -125,7 +125,8 @@ def check_duplicate(account_id, statement_month):
 
 def save_upload(account_id, filename, transactions):
     conn = get_db()
-    owner = (conn.execute('SELECT owner FROM accounts WHERE id=?', (account_id,)).fetchone() or {}).get('owner', 'SHAN')
+    row = conn.execute('SELECT owner FROM accounts WHERE id=?', (account_id,)).fetchone()
+    owner = row['owner'] if row else 'SHAN'
     stmt_month = _dominant_month(transactions)
 
     c = conn.cursor()
