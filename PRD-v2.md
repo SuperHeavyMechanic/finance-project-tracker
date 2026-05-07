@@ -50,13 +50,17 @@ Before uploading any statement, the user sets up their bank accounts once. Each 
 - **Bank** — optional bank name for display
 - **Type** — Credit Card / Debit Card / E-Wallet
 
-Accounts are always tied to an owner. Example saved accounts:
-- SHAN → Mandiri Credit
-- SHAN → BCA Debit
-- JANICE → GoPay
-- JANICE → CIMB Credit
+Accounts are always tied to an owner. Initial account list:
 
-When uploading, the user picks owner first, then selects the matching account from a filtered list.
+| Owner | Name | Bank | Card Type | Last 4 |
+|-------|------|------|-----------|--------|
+| SHAN | CC BNI VISA GARUDA | BNI | Credit – Visa (Garuda co-brand) | 3738 |
+| SHAN | CC MANDIRI VISA SIGNATURE | Mandiri | Credit – Visa Signature | 5856 |
+| SHAN | CC JENIUS | Jenius (BTPN) | Credit | 9XXX |
+
+JANICE's accounts to be added later.
+
+When uploading, the user picks the account from a dropdown (accounts are grouped by owner). The owner field auto-fills based on the selected account but can be changed.
 
 ---
 
@@ -95,9 +99,10 @@ When uploading, the user picks owner first, then selects the matching account fr
 |-------|------|-------|
 | id | integer PK | |
 | owner | text | "SHAN" or "JANICE" |
-| name | text | e.g. "Mandiri Credit" |
-| bank | text | e.g. "Bank Mandiri" |
+| name | text | e.g. "CC BNI VISA GARUDA" |
+| bank | text | e.g. "BNI" |
 | type | text | Credit / Debit / E-Wallet |
+| last_four | text | last 4 digits of card, e.g. "3738" |
 | created_at | datetime | |
 
 ### uploads
