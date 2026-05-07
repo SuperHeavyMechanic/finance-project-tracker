@@ -45,7 +45,7 @@ v1 is a one-shot tool — upload a statement, view transactions, refresh the pag
 ## 5. Accounts Feature
 
 Before uploading any statement, the user sets up their bank accounts once. Each account has:
-- **Owner** — SHAN or JANICE (fixed, not user-configurable)
+- **Owner** — SHAN, JANICE, or JOINT (fixed, not user-configurable)
 - **Name** — user-defined label (e.g. "Mandiri Credit", "BCA Debit", "GoPay")
 - **Bank** — optional bank name for display
 - **Type** — Credit Card / Debit Card / E-Wallet
@@ -68,7 +68,7 @@ When uploading, the user picks the account from a dropdown (accounts are grouped
 
 ```
 1. Select bank account from dropdown (from saved accounts list)
-2. Choose owner: SHAN or JANICE (toggle / button group)
+2. Choose owner: SHAN / JANICE / JOINT (toggle / button group)
 3. Drop or choose PDF / JPG / PNG
 4. Enter password if the PDF is protected
 5. Click "Analyze"
@@ -98,7 +98,7 @@ When uploading, the user picks the account from a dropdown (accounts are grouped
 | Field | Type | Notes |
 |-------|------|-------|
 | id | integer PK | |
-| owner | text | "SHAN" or "JANICE" |
+| owner | text | "SHAN", "JANICE", or "JOINT" |
 | name | text | e.g. "CC BNI VISA GARUDA" |
 | bank | text | e.g. "BNI" |
 | type | text | Credit / Debit / E-Wallet |
@@ -136,15 +136,15 @@ When uploading, the user picks the account from a dropdown (accounts are grouped
 ## 9. Views / Pages
 
 ### 9.1 Dashboard (default view)
-- **Owner toggle** — SHAN / JANICE / Combined (filters the entire dashboard)
+- **Owner toggle** — SHAN / JANICE / JOINT / All (filters the entire dashboard)
 - **6-month trend chart** — stacked bar chart, one bar per month, broken down by category
 - **Monthly summary cards** — for the selected month: total spent, top 3 categories, number of transactions, biggest single purchase
 - **Month selector** — click any month to update the summary cards
-- Default: Combined view, current month selected, last 6 months shown in chart
+- Default: All view, current month selected, last 6 months shown in chart
 
 ### 9.2 Transactions
 - Full table of all transactions (sortable, filterable)
-- **Filters:** owner (SHAN / JANICE / All), month, account, category, search by description
+- **Filters:** owner (SHAN / JANICE / JOINT / All), month, account, category, search by description
 - Editable category (same as v1)
 - CSV export button (exports current filtered view)
 
