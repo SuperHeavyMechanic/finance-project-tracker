@@ -2,95 +2,90 @@ import os
 import base64
 import json
 import io
-from flask import Flask, request, jsonify, render_template
+import csv
+from flask import Flask, request, jsonify, render_template, Response
 from dotenv import load_dotenv
 import anthropic
 import pypdf
 
+from db import (init_db, get_accounts, save_upload, check_duplicate,
+                get_transactions, update_transaction, get_dashboard_data,
+                get_settlements, parse_date, _dominant_month)
+
 load_dotenv()
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20 MB
+app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024
 
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 CATEGORIES = [
-    "Dining & Restaurants",
-    "Groceries",
-    "Transportation",
-    "Travel",
-    "Entertainment",
-    "Shopping",
-    "Healthcare",
-    "Subscriptions",
-    "Utilities & Bills",
-    "Home & Services",
-    "Personal Care",
-    "Other",
+    "HOUSEHOLD & UTILITIES", "GROCERIES", "TRANSPORTATION", "ENTERTAINMENT",
+    "SHOPPING", "HEALTHCARE", "DEBT REPAYMENT", "SAVINGS", "F&B",
+    "OTHERS", "FAMILY", "VACATION", "BOOZE", "EDUCATION",
 ]
 
-EXTRACTION_PROMPT = f"""You are a financial data extraction assistant. Analyze this credit card statement and extract every transaction/expense line item.
+EXTRACTION_PROMPT = f"""You are a financial data extraction assistant. Analyze this credit card statement and extract every transaction line item.
 
-For each transaction, return a JSON array of objects with these exact fields:
-- date: transaction date as a string (keep original format)
-- description: merchant/payee name (clean and readable)
-- amount: numeric value (positive number, no currency symbols)
-- category: one of {json.dumps(CATEGORIES)}
+Return a JSON array of objects with these exact fields:
+- date: transaction date string (keep original format from statement)
+- description: merchant/payee name, clean and readable
+- amount: numeric IDR amount. For foreign currency transactions, use the IDR equivalent shown on the statement. Positive = charge, negative = refund/credit. No symbols or commas.
+- currency: always "IDR"
+- original_amount: if the transaction was originally in a foreign currency, the original numeric amount; otherwise null
+- original_currency: if foreign currency, the 3-letter currency code (e.g. "USD", "SGD"); otherwise null
+- category: one of exactly {json.dumps(CATEGORIES)}
+- is_real_expense: true for actual purchases and expenses. false for: credit card payments, internal transfers, balance payments, auto-debit to own savings.
 
 Rules:
-- Only include actual purchases/charges (not payments, credits, or refunds unless they are negative amounts)
-- For credits/refunds, use a negative amount
-- Categorize intelligently based on merchant name and context
-- If you cannot determine a field, use null
-- Return ONLY the JSON array, no other text
+- Extract every transaction line — skip headers, subtotals, opening/closing balances
+- Return ONLY the raw JSON array, no markdown fences, no explanation
 
-Example output:
+Example:
 [
-  {{"date": "01/15/2025", "description": "WHOLE FOODS MARKET", "amount": 87.43, "category": "Groceries"}},
-  {{"date": "01/16/2025", "description": "UBER EATS", "amount": 34.21, "category": "Dining & Restaurants"}}
+  {{"date": "01/10/2024", "description": "GRAB", "amount": 45000, "currency": "IDR", "original_amount": null, "original_currency": null, "category": "TRANSPORTATION", "is_real_expense": true}},
+  {{"date": "02/10/2024", "description": "NETFLIX", "amount": 154000, "currency": "IDR", "original_amount": 9.99, "original_currency": "USD", "category": "ENTERTAINMENT", "is_real_expense": true}},
+  {{"date": "28/10/2024", "description": "PAYMENT RECEIVED", "amount": -5000000, "currency": "IDR", "original_amount": null, "original_currency": null, "category": "OTHERS", "is_real_expense": false}}
 ]"""
 
-
-def encode_file(file_bytes, media_type):
-    return base64.standard_b64encode(file_bytes).decode("utf-8")
+init_db()
 
 
-@app.route("/")
+@app.route('/')
 def index():
-    return render_template("index.html")
+    return render_template('index.html')
 
 
-@app.route("/upload", methods=["POST"])
-def upload():
-    if "file" not in request.files:
-        return jsonify({"error": "No file provided"}), 400
+@app.route('/api/accounts')
+def api_accounts():
+    return jsonify(get_accounts())
 
-    file = request.files["file"]
-    if not file.filename:
-        return jsonify({"error": "No file selected"}), 400
 
-    filename = file.filename.lower()
+@app.route('/api/upload', methods=['POST'])
+def api_upload():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    account_id = request.form.get('account_id')
+    if not account_id:
+        return jsonify({'error': 'No account selected'}), 400
+    account_id = int(account_id)
+
+    filename = file.filename or ''
     file_bytes = file.read()
+    fname_lower = filename.lower()
 
-    if filename.endswith(".pdf"):
-        media_type = "application/pdf"
-    elif filename.endswith((".jpg", ".jpeg")):
-        media_type = "image/jpeg"
-    elif filename.endswith(".png"):
-        media_type = "image/png"
-    else:
-        return jsonify({"error": "Unsupported file type. Please upload a PDF, JPG, or PNG."}), 400
-
-    if media_type == "application/pdf":
-        password = request.form.get("password", "")
+    if fname_lower.endswith('.pdf'):
+        media_type = 'application/pdf'
+        password = request.form.get('password', '')
         try:
             reader = pypdf.PdfReader(io.BytesIO(file_bytes))
             if reader.is_encrypted:
                 if not password:
-                    return jsonify({"error": "This PDF is password-protected. Please enter the password."}), 400
-                result = reader.decrypt(password)
-                if result == pypdf.PasswordType.NOT_DECRYPTED:
-                    return jsonify({"error": "Incorrect PDF password."}), 400
+                    return jsonify({'error': 'This PDF is password-protected. Please enter the password.'}), 400
+                if reader.decrypt(password) == pypdf.PasswordType.NOT_DECRYPTED:
+                    return jsonify({'error': 'Incorrect PDF password.'}), 400
                 writer = pypdf.PdfWriter()
                 for page in reader.pages:
                     writer.add_page(page)
@@ -98,63 +93,124 @@ def upload():
                 writer.write(buf)
                 file_bytes = buf.getvalue()
         except pypdf.errors.PdfReadError as e:
-            return jsonify({"error": f"Could not read PDF: {str(e)}"}), 400
-
-    encoded = encode_file(file_bytes, media_type)
-
-    if media_type == "application/pdf":
-        content_block = {
-            "type": "document",
-            "source": {
-                "type": "base64",
-                "media_type": media_type,
-                "data": encoded,
-            },
-        }
+            return jsonify({'error': f'Could not read PDF: {e}'}), 400
+    elif fname_lower.endswith(('.jpg', '.jpeg')):
+        media_type = 'image/jpeg'
+    elif fname_lower.endswith('.png'):
+        media_type = 'image/png'
     else:
-        content_block = {
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": media_type,
-                "data": encoded,
-            },
-        }
+        return jsonify({'error': 'Unsupported file type. Please upload a PDF, JPG, or PNG.'}), 400
+
+    encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
+    if media_type == 'application/pdf':
+        content_block = {'type': 'document', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}}
+    else:
+        content_block = {'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}}
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=4096,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        content_block,
-                        {"type": "text", "text": EXTRACTION_PROMPT},
-                    ],
-                }
-            ],
+            model='claude-sonnet-4-6',
+            max_tokens=8192,
+            messages=[{'role': 'user', 'content': [content_block, {'type': 'text', 'text': EXTRACTION_PROMPT}]}]
         )
-
         raw = response.content[0].text.strip()
-
-        # Strip markdown code fences if present
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
+        if raw.startswith('```'):
+            raw = raw.split('```')[1]
+            if raw.startswith('json'):
                 raw = raw[4:]
             raw = raw.strip()
 
-        transactions = json.loads(raw)
-        return jsonify({"transactions": transactions})
+        extracted = json.loads(raw)
+        for t in extracted:
+            t['date_parsed'] = parse_date(t.get('date', ''))
+
+        stmt_month = _dominant_month(extracted)
+        if stmt_month and check_duplicate(account_id, stmt_month):
+            return jsonify({
+                'duplicate': True,
+                'statement_month': stmt_month,
+                'transactions': extracted,
+                'count': len(extracted),
+            })
+
+        upload_id, stmt_month = save_upload(account_id, filename, extracted)
+        return jsonify({'success': True, 'upload_id': upload_id, 'count': len(extracted), 'statement_month': stmt_month})
 
     except json.JSONDecodeError as e:
-        return jsonify({"error": f"Failed to parse extracted data: {str(e)}", "raw": raw}), 500
+        return jsonify({'error': f'Failed to parse extracted data: {e}'}), 500
     except anthropic.APIError as e:
-        return jsonify({"error": f"API error: {str(e)}"}), 500
+        return jsonify({'error': f'API error: {e}'}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 
-if __name__ == "__main__":
+@app.route('/api/upload/confirm', methods=['POST'])
+def api_upload_confirm():
+    data = request.json or {}
+    upload_id, stmt_month = save_upload(
+        data['account_id'], data.get('filename', 'statement'), data.get('transactions', [])
+    )
+    return jsonify({'success': True, 'upload_id': upload_id, 'count': len(data.get('transactions', [])), 'statement_month': stmt_month})
+
+
+@app.route('/api/transactions')
+def api_transactions():
+    is_real = request.args.get('is_real_expense')
+    rows = get_transactions(
+        owner=request.args.get('owner'),
+        month=request.args.get('month'),
+        account_id=request.args.get('account_id'),
+        category=request.args.get('category'),
+        is_real_expense=None if is_real is None else (is_real == '1'),
+        unsettled=request.args.get('unsettled') == '1',
+        search=request.args.get('q'),
+    )
+    return jsonify(rows)
+
+
+@app.route('/api/transactions/<int:tx_id>', methods=['PATCH'])
+def api_update_tx(tx_id):
+    update_transaction(tx_id, request.json or {})
+    return jsonify({'ok': True})
+
+
+@app.route('/api/dashboard')
+def api_dashboard():
+    return jsonify(get_dashboard_data(
+        owner=request.args.get('owner'),
+        months=int(request.args.get('months', 6)),
+    ))
+
+
+@app.route('/api/settlements')
+def api_settlements():
+    return jsonify(get_settlements())
+
+
+@app.route('/api/export')
+def api_export():
+    rows = get_transactions(
+        owner=request.args.get('owner'),
+        month=request.args.get('month'),
+        account_id=request.args.get('account_id'),
+        category=request.args.get('category'),
+        search=request.args.get('q'),
+    )
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(['Date', 'Description', 'Amount (IDR)', 'Currency', 'Orig Amount', 'Orig Currency',
+                'Category', 'Account', 'Owner', 'Real Expense', 'Paid By', 'Settled'])
+    for r in rows:
+        w.writerow([
+            r['date'], r['description'], r['amount'], r['currency'],
+            r['original_amount'] or '', r['original_currency'] or '',
+            r['category'], r['account_name'], r['account_owner'],
+            'Yes' if r['is_real_expense'] else 'No',
+            r['paid_by'], 'Yes' if r['settled'] else 'No',
+        ])
+    return Response(buf.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=transactions.csv'})
+
+
+if __name__ == '__main__':
     app.run(debug=True, port=8080)
