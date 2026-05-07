@@ -186,18 +186,22 @@ Simple top navigation bar:
 
 ---
 
-## 11. Categories (updated to match existing spreadsheet)
+## 11. Categories
 
-1. F&B  
-2. Transportation  
-3. Entertainment  
-4. Healthcare  
-5. Household & Utilities  
-6. Travel  
-7. Shopping  
-8. Personal Care  
-9. Subscriptions  
-10. Others  
+1. HOUSEHOLD & UTILITIES  
+2. GROCERIES  
+3. TRANSPORTATION  
+4. ENTERTAINMENT  
+5. SHOPPING  
+6. HEALTHCARE  
+7. DEBT REPAYMENT  
+8. SAVINGS  
+9. F&B  
+10. OTHERS  
+11. FAMILY  
+12. VACATION  
+13. BOOZE  
+14. EDUCATION  
 
 ---
 
