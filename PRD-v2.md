@@ -120,13 +120,19 @@ When uploading, the user picks the account from a dropdown (accounts are grouped
 |-------|------|-------|
 | id | integer PK | |
 | upload_id | FK → uploads | |
-| account_id | FK → accounts | |
+| account_id | FK → accounts | card the transaction appeared on |
 | date | text | original format from statement |
 | date_parsed | date | normalized YYYY-MM-DD for sorting/filtering |
 | description | text | merchant/payee |
 | amount | real | positive = charge, negative = refund/credit |
 | currency | text | IDR, USD, SGD, etc. |
-| category | text | one of 12 categories |
+| category | text | one of the categories below |
+| is_real_expense | integer | 1 = yes, 0 = no (e.g. internal transfers, bill payments) |
+| paid_by | text | "SHAN", "JANICE", or "JOINT" — who actually paid |
+| actual_account_id | FK → accounts | account that was actually charged (same as account_id in most cases) |
+| ideal_account_id | FK → accounts | account that *should* have been used, if different |
+| settled | integer | 1 = settled, 0 = not yet (only relevant when paid_by ≠ owner of account) |
+| settled_date | date | date reimbursement was made, if settled |
 | created_at | datetime | |
 
 **Storage:** SQLite, single file `data/finance.db` — local only, never committed to git.
@@ -144,16 +150,23 @@ When uploading, the user picks the account from a dropdown (accounts are grouped
 
 ### 9.2 Transactions
 - Full table of all transactions (sortable, filterable)
-- **Filters:** owner (SHAN / JANICE / JOINT / All), month, account, category, search by description
-- Editable category (same as v1)
+- **Columns:** Date, Description, Category, Amount, Currency, Paid By, Account, Real Expense, Settled
+- **Filters:** owner (SHAN / JANICE / JOINT / All), month, account, category, real expense only, unsettled only, search by description
+- Editable fields inline: category, is_real_expense, paid_by, settled
 - CSV export button (exports current filtered view)
 
-### 9.3 Accounts
+### 9.3 Settlements (new)
+- Shows only transactions where `paid_by` ≠ account owner — i.e. one person covered for another
+- Columns: Date, Description, Amount, Paid By, Should Be Paid By, Settled?
+- "Mark as settled" action per row or in bulk
+- Running total: how much SHAN owes JANICE (or vice versa) across unsettled transactions
+
+### 9.4 Accounts
 - List of saved accounts grouped by owner (SHAN / JANICE)
 - Add / edit / delete accounts — each account requires an owner
 - "Last uploaded" date and transaction count per account
 
-### 9.4 Upload
+### 9.5 Upload
 - Can be a modal or a dedicated page
 - Step 1: Select bank account from dropdown
 - Step 2: Owner toggle — SHAN or JANICE (pre-fills based on account, editable)
@@ -168,25 +181,23 @@ When uploading, the user picks the account from a dropdown (accounts are grouped
 
 Simple top navigation bar:
 ```
-[Dashboard]  [Transactions]  [Accounts]  [Upload Statement]
+[Dashboard]  [Transactions]  [Settlements]  [Accounts]  [Upload Statement]
 ```
 
 ---
 
-## 11. Categories (unchanged from v1)
+## 11. Categories (updated to match existing spreadsheet)
 
-1. Dining & Restaurants  
-2. Groceries  
-3. Transportation  
-4. Travel  
-5. Entertainment  
-6. Shopping  
-7. Healthcare  
-8. Subscriptions  
-9. Utilities & Bills  
-10. Home & Services  
-11. Personal Care  
-12. Other  
+1. F&B  
+2. Transportation  
+3. Entertainment  
+4. Healthcare  
+5. Household & Utilities  
+6. Travel  
+7. Shopping  
+8. Personal Care  
+9. Subscriptions  
+10. Others  
 
 ---
 
