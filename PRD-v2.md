@@ -45,24 +45,36 @@ v1 is a one-shot tool — upload a statement, view transactions, refresh the pag
 ## 5. Accounts Feature
 
 Before uploading any statement, the user sets up their bank accounts once. Each account has:
+- **Owner** — SHAN or JANICE (fixed, not user-configurable)
 - **Name** — user-defined label (e.g. "Mandiri Credit", "BCA Debit", "GoPay")
 - **Bank** — optional bank name for display
 - **Type** — Credit Card / Debit Card / E-Wallet
 
-When uploading a statement, the user picks from this saved list via a dropdown. This tags every extracted transaction with the correct account.
+Accounts are always tied to an owner. Example saved accounts:
+- SHAN → Mandiri Credit
+- SHAN → BCA Debit
+- JANICE → GoPay
+- JANICE → CIMB Credit
+
+When uploading, the user picks owner first, then selects the matching account from a filtered list.
 
 ---
 
 ## 6. Upload Flow (v2)
 
 ```
-1. Select account from dropdown (from saved accounts list)
-2. Drop or choose PDF / JPG / PNG
-3. Enter password if the PDF is protected
-4. Click "Analyze"
-5. Claude extracts transactions → saved to local database
-6. User sees a confirmation: "47 transactions added from Mandiri Credit – April 2025"
-7. Duplicate detection: if same account + overlapping dates already exist, warn the user
+1. Select bank account from dropdown (from saved accounts list)
+2. Choose owner: SHAN or JANICE (toggle / button group)
+3. Drop or choose PDF / JPG / PNG
+4. Enter password if the PDF is protected
+5. Click "Analyze"
+6. Claude extracts transactions → saved to local database
+   User sees a confirmation:
+   "47 transactions added — SHAN · Mandiri Credit · April 2025"
+7. Duplicate detection: if the same owner + account + overlapping dates
+   already exist in the database, show a warning before saving:
+   "You've already uploaded Mandiri Credit for April 2025 (SHAN).
+    Upload anyway and merge, or cancel?"
 ```
 
 ---
@@ -82,6 +94,7 @@ When uploading a statement, the user picks from this saved list via a dropdown. 
 | Field | Type | Notes |
 |-------|------|-------|
 | id | integer PK | |
+| owner | text | "SHAN" or "JANICE" |
 | name | text | e.g. "Mandiri Credit" |
 | bank | text | e.g. "Bank Mandiri" |
 | type | text | Credit / Debit / E-Wallet |
@@ -118,29 +131,31 @@ When uploading a statement, the user picks from this saved list via a dropdown. 
 ## 9. Views / Pages
 
 ### 9.1 Dashboard (default view)
-- **6-month trend chart** — bar or line chart, one bar per month, broken down by category (stacked)
+- **Owner toggle** — SHAN / JANICE / Combined (filters the entire dashboard)
+- **6-month trend chart** — stacked bar chart, one bar per month, broken down by category
 - **Monthly summary cards** — for the selected month: total spent, top 3 categories, number of transactions, biggest single purchase
 - **Month selector** — click any month to update the summary cards
-- Default: current month selected, last 6 months shown in chart
+- Default: Combined view, current month selected, last 6 months shown in chart
 
 ### 9.2 Transactions
 - Full table of all transactions (sortable, filterable)
-- **Filters:** month, account, category, search by description
+- **Filters:** owner (SHAN / JANICE / All), month, account, category, search by description
 - Editable category (same as v1)
 - CSV export button (exports current filtered view)
 
 ### 9.3 Accounts
-- List of saved accounts with name, bank, type, transaction count
-- Add / edit / delete accounts
-- "Last uploaded" date per account
+- List of saved accounts grouped by owner (SHAN / JANICE)
+- Add / edit / delete accounts — each account requires an owner
+- "Last uploaded" date and transaction count per account
 
 ### 9.4 Upload
 - Can be a modal or a dedicated page
-- Account picker (dropdown from saved accounts)
-- File drop zone
-- Password field (appears only for PDFs)
-- Analyze button
-- Upload confirmation with transaction count
+- Step 1: Select bank account from dropdown
+- Step 2: Owner toggle — SHAN or JANICE (pre-fills based on account, editable)
+- Step 3: File drop zone
+- Step 4: Password field (appears only for PDFs)
+- Step 5: Analyze button
+- Confirmation message + duplicate warning if applicable
 
 ---
 
