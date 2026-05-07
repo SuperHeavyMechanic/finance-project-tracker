@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/shansebastian/.claude/**)",
+      "Read(//Users/shansebastian/**)",
+      "Read(//Users/shansebastian/.config/**)",
+      "Bash(curl -s http://localhost:5000)",
+      "Bash(curl -v http://127.0.0.1:5000)",
+      "Bash(pkill -f \"python3 app.py\")",
+      "Bash(curl -s http://127.0.0.1:8080)",
+      "mcp__claude_ai_Notion__notion-update-page"
+    ]
+  }
+}
