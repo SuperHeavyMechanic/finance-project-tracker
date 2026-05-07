@@ -1,9 +1,11 @@
 import os
 import base64
 import json
+import io
 from flask import Flask, request, jsonify, render_template
 from dotenv import load_dotenv
 import anthropic
+import pypdf
 
 load_dotenv()
 
@@ -78,6 +80,25 @@ def upload():
         media_type = "image/png"
     else:
         return jsonify({"error": "Unsupported file type. Please upload a PDF, JPG, or PNG."}), 400
+
+    if media_type == "application/pdf":
+        password = request.form.get("password", "")
+        try:
+            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+            if reader.is_encrypted:
+                if not password:
+                    return jsonify({"error": "This PDF is password-protected. Please enter the password."}), 400
+                result = reader.decrypt(password)
+                if result == pypdf.PasswordType.NOT_DECRYPTED:
+                    return jsonify({"error": "Incorrect PDF password."}), 400
+                writer = pypdf.PdfWriter()
+                for page in reader.pages:
+                    writer.add_page(page)
+                buf = io.BytesIO()
+                writer.write(buf)
+                file_bytes = buf.getvalue()
+        except pypdf.errors.PdfReadError as e:
+            return jsonify({"error": f"Could not read PDF: {str(e)}"}), 400
 
     encoded = encode_file(file_bytes, media_type)
 

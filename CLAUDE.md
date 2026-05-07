@@ -44,6 +44,26 @@ Single-file Flask backend (`app.py`) + single-page frontend (`templates/index.ht
 
 `.claude/commands/add-notion-task.md` — project-level command that creates a task in the user's Notion workspace. Prompts for Task name, Area, Project, and Due date, then calls the Notion MCP. A global version also exists at `~/.claude/commands/add-notion-task.md` with brainstorm + quick-capture modes.
 
+## Git & GitHub Workflow
+
+After every set of changes, commit locally **and** push to GitHub so there's always a saved version to revert to.
+
+**Remote:** `https://github.com/SuperHeavyMechanic/finance-project-tracker.git`
+
+**Commit message rules:**
+- Summary line: 50 chars or less, imperative mood ("Add password support", not "Added password support")
+- Body (optional): explain *why*, not what — one blank line after the summary
+- Always append: `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+
+**Workflow after every change:**
+```bash
+git add <specific files>
+git commit -m "..."
+git push origin main
+```
+
+Never use `git add .` or `git add -A` — stage files explicitly to avoid committing `.env` or other sensitive files.
+
 ## Key Constraints
 
 - Max upload size: 20 MB (`MAX_CONTENT_LENGTH`)

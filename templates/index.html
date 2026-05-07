@@ -293,6 +293,15 @@
     </button>
   </div>
 
+  <div id="passwordRow" style="display:none; margin-top:14px; text-align:center;">
+    <div style="display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;">
+      <input type="password" id="pdfPassword" placeholder="PDF password (if protected)"
+        style="width:260px;padding:10px 14px;border:1px solid #d0d0d5;border-radius:10px;font-size:14px;outline:none;"
+        onkeydown="if(event.key==='Enter') analyzeFile()" />
+      <button class="btn" style="margin-top:0;" onclick="analyzeFile()">Analyze</button>
+    </div>
+  </div>
+
   <div class="status-bar" id="statusBar">
     <div class="spinner"></div>
     <div class="status-text" id="statusText">Analyzing your statement with Claude AI…</div>
@@ -360,6 +369,24 @@ const CAT_CLASS = {
 let allTransactions = [];
 let sortKey = 'date';
 let sortDir = 1;
+let stagedFile = null;
+
+function stageFile(file) {
+  const isPdf = file.name.toLowerCase().endsWith('.pdf');
+  if (isPdf) {
+    stagedFile = file;
+    document.getElementById('passwordRow').style.display = 'block';
+    document.getElementById('pdfPassword').focus();
+  } else {
+    stagedFile = null;
+    document.getElementById('passwordRow').style.display = 'none';
+    processFile(file);
+  }
+}
+
+function analyzeFile() {
+  if (stagedFile) processFile(stagedFile);
+}
 
 // Drag & drop
 const dropZone = document.getElementById('dropZone');
@@ -369,11 +396,12 @@ dropZone.addEventListener('drop', e => {
   e.preventDefault();
   dropZone.classList.remove('dragover');
   const file = e.dataTransfer.files[0];
-  if (file) processFile(file);
+  if (file) stageFile(file);
 });
 
 document.getElementById('fileInput').addEventListener('change', e => {
-  if (e.target.files[0]) processFile(e.target.files[0]);
+  const file = e.target.files[0];
+  if (file) stageFile(file);
 });
 
 async function processFile(file) {
@@ -382,6 +410,8 @@ async function processFile(file) {
 
   const formData = new FormData();
   formData.append('file', file);
+  const password = document.getElementById('pdfPassword').value;
+  if (password) formData.append('password', password);
 
   try {
     showStatus('Analyzing your statement with Claude AI…');
@@ -555,6 +585,9 @@ function resetApp() {
   document.getElementById('results').classList.remove('visible');
   document.getElementById('fileInput').value = '';
   document.getElementById('searchInput').value = '';
+  document.getElementById('pdfPassword').value = '';
+  document.getElementById('passwordRow').style.display = 'none';
+  stagedFile = null;
   hideError(); hideStatus();
 }
 
