@@ -35,6 +35,8 @@ v1 is a one-shot tool — upload a statement, view transactions, refresh the pag
 ## 4. Out of Scope for v2
 
 - User authentication / separate logins
+- UI/UX handling for set-up credit card account (credit card account are injected through backend data)
+- Flow for debit card transaction handling
 - Budget limits or alerts
 - PDF/report export
 - Cloud sync or remote access
@@ -48,15 +50,15 @@ Before uploading any statement, the user sets up their bank accounts once. Each 
 - **Owner** — SHAN, JANICE, or JOINT (fixed, not user-configurable)
 - **Name** — user-defined label (e.g. "Mandiri Credit", "BCA Debit", "GoPay")
 - **Bank** — optional bank name for display
-- **Type** — Credit Card / Debit Card / E-Wallet
+- **Last 4** — last 4 digits of card / account numbers
 
 Accounts are always tied to an owner. Initial account list:
 
-| Owner | Name | Bank | Card Type | Last 4 |
-|-------|------|------|-----------|--------|
-| SHAN | CC BNI VISA GARUDA | BNI | Credit – Visa (Garuda co-brand) | 3738 |
-| SHAN | CC MANDIRI VISA SIGNATURE | Mandiri | Credit – Visa Signature | 5856 |
-| SHAN | CC JENIUS | Jenius (BTPN) | Credit | 9XXX |
+| Owner | Name | Bank | Last 4 |
+|-------|------|------|--------|
+| SHAN | CC BNI VISA GARUDA | BNI | 3738 |
+| SHAN | CC MANDIRI VISA SIGNATURE | Mandiri | 5856 |
+| JOINT | CC JENIUS | Jenius (BTPN) | 9XXX |
 
 JANICE's accounts to be added later.
 
@@ -67,15 +69,14 @@ When uploading, the user picks the account from a dropdown (accounts are grouped
 ## 6. Upload Flow (v2)
 
 ```
-1. Select bank account from dropdown (from saved accounts list)
-2. Choose owner: SHAN / JANICE / JOINT (toggle / button group)
-3. Drop or choose PDF / JPG / PNG
-4. Enter password if the PDF is protected
-5. Click "Analyze"
-6. Claude extracts transactions → saved to local database
+1. Select bank account from dropdown (from saved accounts list), show owner name (prepopulated based on data in our database)
+2. Drop or choose PDF / JPG / PNG
+3. Enter password if the PDF is protected
+4. Click "Analyze"
+5. Claude extracts transactions → saved to local database
    User sees a confirmation:
    "47 transactions added — SHAN · Mandiri Credit · April 2025"
-7. Duplicate detection: if the same owner + account + overlapping dates
+6. Duplicate detection: if the same owner + account + overlapping dates
    already exist in the database, show a warning before saving:
    "You've already uploaded Mandiri Credit for April 2025 (SHAN).
     Upload anyway and merge, or cancel?"
@@ -86,9 +87,7 @@ When uploading, the user picks the account from a dropdown (accounts are grouped
 ## 7. Currency Handling
 
 - **Primary currency:** IDR (Indonesian Rupiah)
-- **Multi-currency:** Transactions in other currencies (USD, SGD, MYR, etc.) are stored with their original amount and currency code
-- **Display:** Show original currency (e.g. "USD 49.99") alongside IDR equivalent when available — Claude will extract what's on the statement
-- **No forced conversion** — do not attempt live exchange rate lookups
+- **Other currency:** Transactions in other currencies (USD, SGD, MYR, etc.) should use the IDR equivalent amount which is shown in the statement (the original amount and the currency code should be also be stored in our database)
 
 ---
 
@@ -101,7 +100,6 @@ When uploading, the user picks the account from a dropdown (accounts are grouped
 | owner | text | "SHAN", "JANICE", or "JOINT" |
 | name | text | e.g. "CC BNI VISA GARUDA" |
 | bank | text | e.g. "BNI" |
-| type | text | Credit / Debit / E-Wallet |
 | last_four | text | last 4 digits of card, e.g. "3738" |
 | created_at | datetime | |
 
