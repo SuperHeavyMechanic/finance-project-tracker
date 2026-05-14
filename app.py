@@ -9,8 +9,10 @@ import anthropic
 import pypdf
 
 from db import (init_db, get_accounts, save_upload, check_duplicate,
-                get_transactions, update_transaction, get_dashboard_data,
-                get_settlements, parse_date, _dominant_month)
+                get_transactions, update_transaction, delete_transaction,
+                get_dashboard_data, get_settlements, get_statements,
+                parse_date, _dominant_month)
+from rules import apply_rules, build_rules_prompt
 
 load_dotenv()
 
@@ -25,28 +27,35 @@ CATEGORIES = [
     "OTHERS", "FAMILY", "VACATION", "BOOZE", "EDUCATION",
 ]
 
-EXTRACTION_PROMPT = f"""You are a financial data extraction assistant. Analyze this credit card statement and extract every transaction line item.
+def build_extraction_prompt(rules_section=''):
+    rules_block = f'\n\n{rules_section}' if rules_section else ''
+    return f"""You are a financial data extraction assistant. Analyze this credit card statement and extract every transaction line item.{rules_block}
 
-Return a JSON array of objects with these exact fields:
-- date: transaction date string (keep original format from statement)
-- description: merchant/payee name, clean and readable
-- amount: numeric IDR amount. For foreign currency transactions, use the IDR equivalent shown on the statement. Positive = charge, negative = refund/credit. No symbols or commas.
-- currency: always "IDR"
-- original_amount: if the transaction was originally in a foreign currency, the original numeric amount; otherwise null
-- original_currency: if foreign currency, the 3-letter currency code (e.g. "USD", "SGD"); otherwise null
-- category: one of exactly {json.dumps(CATEGORIES)}
-- is_real_expense: true for actual purchases and expenses. false for: credit card payments, internal transfers, balance payments, auto-debit to own savings.
+Return a JSON object with exactly two top-level fields:
+- statement_date: the billing cycle end date or statement date as printed on the statement (keep original format), or null if not found
+- transactions: an array of objects with these exact fields:
+  - date: transaction date string (keep original format from statement)
+  - description: merchant/payee name, clean and readable
+  - amount: numeric IDR amount. For foreign currency transactions, use the IDR equivalent shown on the statement. Positive = charge, negative = refund/credit. No symbols or commas.
+  - currency: always "IDR"
+  - original_amount: if the transaction was originally in a foreign currency, the original numeric amount; otherwise null
+  - original_currency: if foreign currency, the 3-letter currency code (e.g. "USD", "SGD"); otherwise null
+  - category: one of exactly {json.dumps(CATEGORIES)}
+  - is_real_expense: true for actual purchases and expenses. false for: credit card payments, internal transfers, balance payments, auto-debit to own savings.
 
 Rules:
 - Extract every transaction line — skip headers, subtotals, opening/closing balances
-- Return ONLY the raw JSON array, no markdown fences, no explanation
+- Return ONLY the raw JSON object, no markdown fences, no explanation
 
 Example:
-[
-  {{"date": "01/10/2024", "description": "GRAB", "amount": 45000, "currency": "IDR", "original_amount": null, "original_currency": null, "category": "TRANSPORTATION", "is_real_expense": true}},
-  {{"date": "02/10/2024", "description": "NETFLIX", "amount": 154000, "currency": "IDR", "original_amount": 9.99, "original_currency": "USD", "category": "ENTERTAINMENT", "is_real_expense": true}},
-  {{"date": "28/10/2024", "description": "PAYMENT RECEIVED", "amount": -5000000, "currency": "IDR", "original_amount": null, "original_currency": null, "category": "OTHERS", "is_real_expense": false}}
-]"""
+{{
+  "statement_date": "31/10/2024",
+  "transactions": [
+    {{"date": "01/10/2024", "description": "GRAB", "amount": 45000, "currency": "IDR", "original_amount": null, "original_currency": null, "category": "TRANSPORTATION", "is_real_expense": true}},
+    {{"date": "02/10/2024", "description": "NETFLIX", "amount": 154000, "currency": "IDR", "original_amount": 9.99, "original_currency": "USD", "category": "ENTERTAINMENT", "is_real_expense": true}},
+    {{"date": "28/10/2024", "description": "PAYMENT RECEIVED", "amount": -5000000, "currency": "IDR", "original_amount": null, "original_currency": null, "category": "OTHERS", "is_real_expense": false}}
+  ]
+}}"""
 
 init_db()
 
@@ -107,11 +116,15 @@ def api_upload():
     else:
         content_block = {'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}}
 
+    all_accounts = get_accounts()
+    account_name = next((a['name'] for a in all_accounts if a['id'] == account_id), '')
+    prompt_text = build_extraction_prompt(build_rules_prompt(account_name))
+
     try:
         response = client.messages.create(
             model='claude-sonnet-4-6',
             max_tokens=8192,
-            messages=[{'role': 'user', 'content': [content_block, {'type': 'text', 'text': EXTRACTION_PROMPT}]}]
+            messages=[{'role': 'user', 'content': [content_block, {'type': 'text', 'text': prompt_text}]}]
         )
         raw = response.content[0].text.strip()
         if raw.startswith('```'):
@@ -120,7 +133,15 @@ def api_upload():
                 raw = raw[4:]
             raw = raw.strip()
 
-        extracted = json.loads(raw)
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            extracted = parsed
+            statement_date = None
+        else:
+            extracted = parsed.get('transactions', [])
+            statement_date = parsed.get('statement_date')
+
+        apply_rules(extracted, account_name)
         for t in extracted:
             t['date_parsed'] = parse_date(t.get('date', ''))
 
@@ -129,11 +150,12 @@ def api_upload():
             return jsonify({
                 'duplicate': True,
                 'statement_month': stmt_month,
+                'statement_date': statement_date,
                 'transactions': extracted,
                 'count': len(extracted),
             })
 
-        upload_id, stmt_month = save_upload(account_id, filename, extracted)
+        upload_id, stmt_month = save_upload(account_id, filename, extracted, statement_date=statement_date)
         return jsonify({'success': True, 'upload_id': upload_id, 'count': len(extracted), 'statement_month': stmt_month})
 
     except json.JSONDecodeError as e:
@@ -148,7 +170,8 @@ def api_upload():
 def api_upload_confirm():
     data = request.json or {}
     upload_id, stmt_month = save_upload(
-        data['account_id'], data.get('filename', 'statement'), data.get('transactions', [])
+        data['account_id'], data.get('filename', 'statement'), data.get('transactions', []),
+        statement_date=data.get('statement_date'),
     )
     return jsonify({'success': True, 'upload_id': upload_id, 'count': len(data.get('transactions', [])), 'statement_month': stmt_month})
 
@@ -174,6 +197,12 @@ def api_update_tx(tx_id):
     return jsonify({'ok': True})
 
 
+@app.route('/api/transactions/<int:tx_id>', methods=['DELETE'])
+def api_delete_tx(tx_id):
+    delete_transaction(tx_id)
+    return jsonify({'ok': True})
+
+
 @app.route('/api/dashboard')
 def api_dashboard():
     return jsonify(get_dashboard_data(
@@ -185,6 +214,11 @@ def api_dashboard():
 @app.route('/api/settlements')
 def api_settlements():
     return jsonify(get_settlements())
+
+
+@app.route('/api/statements')
+def api_statements():
+    return jsonify(get_statements())
 
 
 @app.route('/api/export')

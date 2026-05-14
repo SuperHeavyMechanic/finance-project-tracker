@@ -93,6 +93,10 @@
     .inline-select { border: none; background: transparent; font: inherit; cursor: pointer; padding: 0; outline: none; border-radius: 8px; }
     .inline-select:hover { background: #f0f0f5; }
     .inline-check { width: 16px; height: 16px; cursor: pointer; accent-color: #0071e3; }
+    .amount-input { width: 110px; padding: 3px 7px; border: 1px solid #0071e3; border-radius: 6px; font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+    .btn-del { background: none; border: none; color: #c7c7cc; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 6px; transition: color .15s, background .15s; line-height: 1; }
+    .btn-del:hover { color: #ff3b30; background: #fff0ee; }
+    .stmt-ref { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; background: #f0f6ff; color: #1a56db; white-space: nowrap; }
 
     /* ── BUTTONS ── */
     .btn { display: inline-block; padding: 10px 22px; background: #0071e3; color: #fff; border: none; border-radius: 980px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s; }
@@ -165,6 +169,7 @@
     <a data-view="transactions">Transactions</a>
     <a data-view="settlements">Settlements</a>
     <a data-view="accounts">Accounts</a>
+    <a data-view="statements">Statements</a>
     <a data-view="upload">Upload</a>
   </nav>
 </header>
@@ -225,9 +230,11 @@
               <th onclick="txSort('category')">Category</th>
               <th onclick="txSort('amount')" style="text-align:right">Amount</th>
               <th>Account</th>
+              <th>Statement</th>
               <th>Paid By</th>
               <th style="text-align:center">Real?</th>
               <th style="text-align:center">Settled?</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="tx-body"></tbody>
@@ -276,6 +283,12 @@
   <div id="view-accounts" class="view">
     <div class="page-title">Accounts</div>
     <div id="accounts-list"></div>
+  </div>
+
+  <!-- ── STATEMENTS ── -->
+  <div id="view-statements" class="view">
+    <div class="page-title">Statements</div>
+    <div id="statements-list"></div>
   </div>
 
   <!-- ── UPLOAD ── -->
@@ -378,6 +391,7 @@ function navigate(view) {
   if (view === 'transactions') initTransactions();
   if (view === 'settlements') loadSettlements();
   if (view === 'accounts') loadAccounts();
+  if (view === 'statements') loadStatements();
   if (view === 'upload') initUpload();
 }
 
@@ -396,6 +410,22 @@ function fmtMonth(ym) {
   if (!ym) return '';
   const [y, m] = ym.split('-');
   return new Date(+y, +m - 1).toLocaleString('en', {month: 'short', year: 'numeric'});
+}
+
+function stmtRef(bank, statementDate, statementMonth) {
+  const b = (bank || '').toUpperCase();
+  let dateLabel = '';
+  if (statementDate) {
+    const d = statementDate.includes('-')
+      ? new Date(statementDate + 'T00:00:00')
+      : (() => { const [dd,mm,yyyy] = statementDate.split('/'); return new Date(`${yyyy}-${mm}-${dd}T00:00:00`); })();
+    if (!isNaN(d)) dateLabel = `${d.getDate()} ${d.toLocaleString('en',{month:'short'})} ${d.getFullYear()}`;
+    else dateLabel = statementDate;
+  } else if (statementMonth) {
+    dateLabel = fmtMonth(statementMonth);
+  }
+  if (!b && !dateLabel) return '—';
+  return `<span class="stmt-ref">CC ${b}${dateLabel ? ' · ' + dateLabel : ''}</span>`;
 }
 
 function catBadge(cat) {
@@ -560,7 +590,7 @@ function renderTxTable() {
 
   const tbody = document.getElementById('tx-body');
   if (!sorted.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="no-data">No transactions found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="no-data">No transactions found.</td></tr>';
     return;
   }
 
@@ -578,10 +608,11 @@ function renderTxTable() {
         </select>
       </td>
       <td class="amount-col ${amtCls}" style="white-space:nowrap">
-        ${fmtAmount(t.amount)}
+        <span onclick="startAmountEdit(this,${t.id},${t.amount})" style="cursor:pointer;border-bottom:1px dashed #d0d0d5" title="Click to edit">${fmtAmount(t.amount)}</span>
         ${t.original_currency ? `<div style="font-size:11px;color:#8e8e93">${t.original_currency} ${t.original_amount?.toLocaleString()}</div>` : ''}
       </td>
       <td style="white-space:nowrap">${ownerBadge(t.account_owner)} ${esc(t.account_name)}</td>
+      <td style="white-space:nowrap">${stmtRef(t.bank, t.statement_date, t.upload_statement_month)}</td>
       <td>
         <select class="inline-select owner-badge owner-${t.paid_by}"
                 onchange="patchTx(${t.id},{paid_by:this.value},this,'owner-badge','owner-')">
@@ -596,6 +627,9 @@ function renderTxTable() {
         <input type="checkbox" class="inline-check" ${t.settled?'checked':''}
                onchange="patchTx(${t.id},{settled:this.checked?1:0,settled_date:this.checked?new Date().toISOString().slice(0,10):null})">
       </td>
+      <td style="text-align:center">
+        <button class="btn-del" onclick="deleteTx(${t.id})" title="Delete transaction">✕</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -609,6 +643,38 @@ async function patchTx(id, fields, el, badgeClass, classMap) {
   }
   const row = txRows.find(r => r.id === id);
   if (row) Object.assign(row, fields);
+}
+
+function startAmountEdit(spanEl, id, currentAmount) {
+  const td = spanEl.closest('td');
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = '0.01';
+  input.value = currentAmount;
+  input.className = 'amount-input';
+  async function save() {
+    const val = parseFloat(input.value);
+    td.replaceChild(spanEl, input);
+    if (!isNaN(val) && val !== currentAmount) {
+      await patchTx(id, {amount: val});
+      renderTxTable();
+    }
+  }
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') td.replaceChild(spanEl, input);
+  });
+  td.replaceChild(input, spanEl);
+  input.focus();
+  input.select();
+}
+
+async function deleteTx(id) {
+  if (!confirm('Permanently delete this transaction? This cannot be undone.')) return;
+  await fetch(`/api/transactions/${id}`, {method: 'DELETE'});
+  txRows = txRows.filter(r => r.id !== id);
+  renderTxTable();
 }
 
 function exportCSV() {
@@ -713,6 +779,48 @@ async function loadAccounts() {
   `).join('');
 }
 
+// ── STATEMENTS ──
+async function loadStatements() {
+  const data = await api('/api/statements');
+  const el = document.getElementById('statements-list');
+  if (!data.length) {
+    el.innerHTML = '<div class="no-data" style="padding:48px;text-align:center;color:#8e8e93">No statements uploaded yet.</div>';
+    return;
+  }
+  el.innerHTML = data.map(group => {
+    const acc = group.account;
+    if (!group.uploads.length) return '';
+    const rows = group.uploads.map(u => {
+      const changed = u.active_count !== u.original_count || Math.abs((u.active_total||0) - (u.original_total||0)) > 0.5;
+      const deletedCount = (u.original_count||0) - (u.active_count||0);
+      return `<tr>
+        <td style="white-space:nowrap;font-weight:500">${stmtRef(acc.bank, u.statement_date, u.statement_month)}</td>
+        <td style="font-size:12px;color:#6e6e73;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(u.filename||'')}">${esc(u.filename||'—')}</td>
+        <td style="white-space:nowrap;font-size:12px;color:#6e6e73">${(u.uploaded_at||'').slice(0,10)||'—'}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <strong>${u.original_count||0}</strong> txn<br>
+          <span style="font-size:12px">${fmtAmount(u.original_total)}</span>
+        </td>
+        <td style="text-align:right;white-space:nowrap;${changed?'color:#8e8e93':''}">
+          ${u.active_count||0} txn${deletedCount>0?` <span style="color:#ff3b30;font-size:11px">(-${deletedCount})</span>`:''}
+          <br><span style="font-size:12px">${fmtAmount(u.active_total)}</span>
+        </td>
+      </tr>`;
+    }).join('');
+    return `<div style="margin-bottom:32px;">
+      <div class="accounts-group-title" style="margin-bottom:12px;">${ownerBadge(acc.owner)} ${esc(acc.name)}</div>
+      <div class="table-wrap"><div style="overflow-x:auto;"><table>
+        <thead><tr>
+          <th>Statement</th><th>Filename</th><th>Uploaded</th>
+          <th style="text-align:right">Extracted</th>
+          <th style="text-align:right">Active</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div></div>
+    </div>`;
+  }).join('');
+}
+
 // ── UPLOAD ──
 let stagedFile = null;
 
@@ -789,7 +897,7 @@ async function doUpload() {
     if (data.error) { showError('up-error', data.error); return; }
 
     if (data.duplicate) {
-      pendingDuplicate = {account_id: +document.getElementById('up-account').value, filename: stagedFile.name, transactions: data.transactions};
+      pendingDuplicate = {account_id: +document.getElementById('up-account').value, filename: stagedFile.name, transactions: data.transactions, statement_date: data.statement_date || null};
       document.getElementById('up-duplicate-msg').textContent =
         `You've already uploaded a statement for ${fmtMonth(data.statement_month)} on this account. Upload anyway and merge?`;
       document.getElementById('up-duplicate').style.display = 'block';

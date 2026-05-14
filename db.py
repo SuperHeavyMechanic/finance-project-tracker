@@ -81,6 +81,16 @@ def init_db():
             created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
         );
     ''')
+    for _col_sql in [
+        "ALTER TABLE uploads ADD COLUMN statement_date TEXT",
+        "ALTER TABLE uploads ADD COLUMN original_total_amount REAL DEFAULT 0",
+    ]:
+        try:
+            conn.execute(_col_sql)
+        except Exception:
+            pass
+    conn.commit()
+
     if conn.execute('SELECT COUNT(*) FROM accounts').fetchone()[0] == 0:
         for a in SEED_ACCOUNTS:
             conn.execute(
@@ -123,16 +133,17 @@ def check_duplicate(account_id, statement_month):
     conn.close()
     return exists is not None
 
-def save_upload(account_id, filename, transactions):
+def save_upload(account_id, filename, transactions, statement_date=None):
     conn = get_db()
     row = conn.execute('SELECT owner FROM accounts WHERE id=?', (account_id,)).fetchone()
     owner = row['owner'] if row else 'SHAN'
     stmt_month = _dominant_month(transactions)
+    original_total = sum((t.get('amount') or 0) for t in transactions if (t.get('amount') or 0) > 0)
 
     c = conn.cursor()
     c.execute(
-        'INSERT INTO uploads (account_id, filename, statement_month, transaction_count) VALUES (?,?,?,?)',
-        (account_id, filename, stmt_month, len(transactions))
+        'INSERT INTO uploads (account_id, filename, statement_month, transaction_count, statement_date, original_total_amount) VALUES (?,?,?,?,?,?)',
+        (account_id, filename, stmt_month, len(transactions), statement_date, original_total)
     )
     upload_id = c.lastrowid
 
@@ -164,9 +175,11 @@ def get_transactions(owner=None, month=None, account_id=None, category=None,
                      is_real_expense=None, unsettled=False, search=None):
     conn = get_db()
     q = '''
-        SELECT t.*, a.name AS account_name, a.owner AS account_owner, a.bank
+        SELECT t.*, a.name AS account_name, a.owner AS account_owner, a.bank,
+               u.statement_date, u.statement_month AS upload_statement_month, u.filename AS upload_filename
         FROM transactions t
         JOIN accounts a ON a.id = t.account_id
+        LEFT JOIN uploads u ON u.id = t.upload_id
         WHERE 1=1
     '''
     p = []
@@ -190,7 +203,7 @@ def get_transactions(owner=None, month=None, account_id=None, category=None,
     return [dict(r) for r in rows]
 
 def update_transaction(tx_id, fields):
-    allowed = {'category', 'is_real_expense', 'paid_by', 'settled', 'settled_date'}
+    allowed = {'category', 'is_real_expense', 'paid_by', 'settled', 'settled_date', 'amount'}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
@@ -199,6 +212,13 @@ def update_transaction(tx_id, fields):
     conn.execute(f'UPDATE transactions SET {clause} WHERE id=?', list(updates.values()) + [tx_id])
     conn.commit()
     conn.close()
+
+def delete_transaction(tx_id):
+    conn = get_db()
+    conn.execute('DELETE FROM transactions WHERE id=?', (tx_id,))
+    conn.commit()
+    conn.close()
+
 
 def get_dashboard_data(owner=None, months=6):
     conn = get_db()
@@ -276,3 +296,30 @@ def get_settlements():
     ''').fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_statements():
+    conn = get_db()
+    uploads = conn.execute('''
+        SELECT u.id, u.account_id, u.filename, u.statement_month, u.statement_date,
+               u.uploaded_at, u.transaction_count AS original_count,
+               u.original_total_amount AS original_total,
+               COUNT(t.id) AS active_count,
+               COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS active_total
+        FROM uploads u
+        LEFT JOIN transactions t ON t.upload_id = u.id
+        GROUP BY u.id
+        ORDER BY u.account_id, u.statement_month DESC
+    ''').fetchall()
+    accounts = conn.execute('SELECT * FROM accounts ORDER BY owner, name').fetchall()
+    conn.close()
+
+    acc_map = {a['id']: dict(a) for a in accounts}
+    result = {}
+    for u in uploads:
+        u = dict(u)
+        aid = u['account_id']
+        if aid not in result:
+            result[aid] = {'account': acc_map[aid], 'uploads': []}
+        result[aid]['uploads'].append(u)
+    return list(result.values())
