@@ -226,13 +226,13 @@
           <thead>
             <tr>
               <th onclick="txSort('date_parsed')">Date</th>
-              <th onclick="txSort('description')">Description</th>
               <th onclick="txSort('category')">Category</th>
-              <th onclick="txSort('amount')" style="text-align:right">Amount</th>
-              <th>Account</th>
-              <th>Statement</th>
-              <th>Paid By</th>
+              <th onclick="txSort('description')">Expense Items Detail</th>
+              <th onclick="txSort('amount')" style="text-align:right">Amount (Rp)</th>
               <th style="text-align:center">Real?</th>
+              <th>Paid By</th>
+              <th>Actual Source</th>
+              <th>Ideal Source</th>
               <th style="text-align:center">Settled?</th>
               <th></th>
             </tr>
@@ -607,32 +607,39 @@ function renderTxTable() {
 
   tbody.innerHTML = sorted.map(t => {
     const catOpts = CATEGORIES.map(c => `<option value="${c}" ${c===t.category?'selected':''}>${c}</option>`).join('');
-    const owners = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===t.paid_by?'selected':''}>${o}</option>`).join('');
+    const actualOpts = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===t.paid_by?'selected':''}>${o}</option>`).join('');
+    const idealOpts  = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===(t.ideal_paid_by||'')?'selected':''}>${o}</option>`).join('');
     const amtCls = t.amount < 0 ? 'amount-neg' : '';
     return `<tr>
       <td style="white-space:nowrap;color:#6e6e73">${fmtDate(t.date_parsed)}</td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(t.description)}">${esc(t.description||'—')}</td>
       <td>
         <select class="inline-select cat-badge ${CAT_CLASS[t.category]||'cat-OTHERS'}"
                 onchange="patchTx(${t.id},{category:this.value},this,'cat-badge',CAT_CLASS)">
           ${catOpts}
         </select>
       </td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(t.description)}">${esc(t.description||'—')}</td>
       <td class="amount-col ${amtCls}" style="white-space:nowrap">
         <span onclick="startAmountEdit(this,${t.id},${t.amount})" style="cursor:pointer;border-bottom:1px dashed #d0d0d5" title="Click to edit">${fmtAmount(t.amount)}</span>
         ${t.original_currency ? `<div style="font-size:11px;color:#8e8e93">${t.original_currency} ${t.original_amount?.toLocaleString()}</div>` : ''}
       </td>
-      <td style="white-space:nowrap">${ownerBadge(t.account_owner)} ${esc(t.account_name)}</td>
-      <td style="white-space:nowrap">${stmtRef(t.bank, t.statement_date, t.upload_statement_month)}</td>
-      <td>
-        <select class="inline-select owner-badge owner-${t.paid_by}"
-                onchange="patchTx(${t.id},{paid_by:this.value},this,'owner-badge','owner-')">
-          ${owners}
-        </select>
-      </td>
       <td style="text-align:center">
         <input type="checkbox" class="inline-check" ${t.is_real_expense?'checked':''}
                onchange="patchTx(${t.id},{is_real_expense:this.checked?1:0})">
+      </td>
+      <td style="white-space:nowrap">${ownerBadge(t.account_owner)}</td>
+      <td>
+        <select class="inline-select owner-badge owner-${t.paid_by}"
+                onchange="patchTx(${t.id},{paid_by:this.value},this,'owner-badge','owner-')">
+          ${actualOpts}
+        </select>
+      </td>
+      <td>
+        <select class="inline-select owner-badge owner-${t.ideal_paid_by||''}"
+                onchange="patchTx(${t.id},{ideal_paid_by:this.value},this,'owner-badge','owner-')">
+          <option value="" ${!t.ideal_paid_by?'selected':''}>—</option>
+          ${idealOpts}
+        </select>
       </td>
       <td style="text-align:center">
         <input type="checkbox" class="inline-check" ${t.settled?'checked':''}
