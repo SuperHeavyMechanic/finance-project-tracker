@@ -3,33 +3,14 @@ GLOBAL_RULES = {
     'chatgpt': 'OTHERS',
     'anthropic': 'OTHERS',
     'claude.ai': 'OTHERS',
-    'midjourney': 'OTHERS',
-    'perplexity': 'OTHERS',
-    'github copilot': 'OTHERS',
-    'copilot': 'OTHERS',
 }
 
 ACCOUNT_RULES = {
     'BNI': {
-        'grab': 'TRANSPORTATION',
-        'gojek': 'TRANSPORTATION',
-        'tokopedia': 'SHOPPING',
-        'shopee': 'SHOPPING',
-        'netflix': 'ENTERTAINMENT',
-        'spotify': 'ENTERTAINMENT',
-        'indomaret': 'GROCERIES',
-        'alfamart': 'GROCERIES',
     },
     'Mandiri': {
-        'grab': 'F&B',
-        'gojek': 'F&B',
-        'tokopedia': 'SHOPPING',
-        'shopee': 'SHOPPING',
-        'netflix': 'ENTERTAINMENT',
     },
     'Jenius': {
-        'grab': 'TRANSPORTATION',
-        'gojek': 'TRANSPORTATION',
     },
 }
 
