@@ -417,7 +417,8 @@ function fmtAmount(amount, currency) {
 function fmtMonth(ym) {
   if (!ym) return '';
   const [y, m] = ym.split('-');
-  return new Date(+y, +m - 1).toLocaleString('en', {month: 'short', year: 'numeric'});
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1];
+  return `${mon}-${y.slice(2)}`;
 }
 
 function stmtRef(bank, statementDate, statementMonth) {
@@ -427,8 +428,10 @@ function stmtRef(bank, statementDate, statementMonth) {
     const d = statementDate.includes('-')
       ? new Date(statementDate + 'T00:00:00')
       : (() => { const [dd,mm,yyyy] = statementDate.split('/'); return new Date(`${yyyy}-${mm}-${dd}T00:00:00`); })();
-    if (!isNaN(d)) dateLabel = `${d.getDate()} ${d.toLocaleString('en',{month:'short'})} ${d.getFullYear()}`;
-    else dateLabel = statementDate;
+    if (!isNaN(d)) {
+      const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+      dateLabel = `${mon}-${String(d.getFullYear()).slice(2)}`;
+    } else dateLabel = statementDate;
   } else if (statementMonth) {
     dateLabel = fmtMonth(statementMonth);
   }
