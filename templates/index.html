@@ -396,6 +396,14 @@ function navigate(view) {
 }
 
 // ── UTILS ──
+function fmtDate(dateParsed) {
+  if (!dateParsed) return '—';
+  const [y, m, d] = dateParsed.split('-');
+  if (!y || !m || !d) return dateParsed;
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m,10)-1];
+  return `${d}-${mon}-${y.slice(2)}`;
+}
+
 function fmtAmount(amount, currency) {
   if (amount == null) return '—';
   const abs = Math.abs(amount);
@@ -599,7 +607,7 @@ function renderTxTable() {
     const owners = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===t.paid_by?'selected':''}>${o}</option>`).join('');
     const amtCls = t.amount < 0 ? 'amount-neg' : '';
     return `<tr>
-      <td style="white-space:nowrap;color:#6e6e73">${t.date || '—'}</td>
+      <td style="white-space:nowrap;color:#6e6e73">${fmtDate(t.date_parsed)}</td>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(t.description)}">${esc(t.description||'—')}</td>
       <td>
         <select class="inline-select cat-badge ${CAT_CLASS[t.category]||'cat-OTHERS'}"
@@ -729,7 +737,7 @@ async function loadSettlements() {
     return;
   }
   tbody.innerHTML = rows.map(t => `<tr style="${t.settled?'opacity:.5':''}">
-    <td style="white-space:nowrap;color:#6e6e73">${t.date||'—'}</td>
+    <td style="white-space:nowrap;color:#6e6e73">${fmtDate(t.date_parsed)}</td>
     <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.description||'—')}</td>
     <td>${catBadge(t.category)}</td>
     <td class="amount-col" style="white-space:nowrap">${fmtAmount(t.amount)}</td>
