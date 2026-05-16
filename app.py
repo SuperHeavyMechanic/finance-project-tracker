@@ -145,7 +145,8 @@ def api_upload():
         for t in extracted:
             t['date_parsed'] = parse_date(t.get('date', ''))
 
-        stmt_month = _dominant_month(extracted)
+        parsed_sd = parse_date(statement_date) if statement_date else None
+        stmt_month = parsed_sd[:7] if parsed_sd else _dominant_month(extracted)
         if stmt_month and check_duplicate(account_id, stmt_month):
             return jsonify({
                 'duplicate': True,

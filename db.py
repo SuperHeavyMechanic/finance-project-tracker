@@ -92,6 +92,14 @@ def init_db():
             pass
     conn.commit()
 
+    # Migration: re-derive statement_month from statement_date for all existing uploads
+    stale = conn.execute('SELECT id, statement_date FROM uploads WHERE statement_date IS NOT NULL').fetchall()
+    for u in stale:
+        parsed = parse_date(u['statement_date'])
+        if parsed:
+            conn.execute('UPDATE uploads SET statement_month=? WHERE id=?', (parsed[:7], u['id']))
+    conn.commit()
+
     if conn.execute('SELECT COUNT(*) FROM accounts').fetchone()[0] == 0:
         for a in SEED_ACCOUNTS:
             conn.execute(
@@ -138,7 +146,8 @@ def save_upload(account_id, filename, transactions, statement_date=None):
     conn = get_db()
     row = conn.execute('SELECT owner FROM accounts WHERE id=?', (account_id,)).fetchone()
     owner = row['owner'] if row else 'SHAN'
-    stmt_month = _dominant_month(transactions)
+    parsed_sd = parse_date(statement_date) if statement_date else None
+    stmt_month = parsed_sd[:7] if parsed_sd else _dominant_month(transactions)
     original_total = sum((t.get('amount') or 0) for t in transactions if (t.get('amount') or 0) > 0)
 
     c = conn.cursor()
