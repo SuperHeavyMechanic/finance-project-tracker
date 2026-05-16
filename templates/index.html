@@ -234,6 +234,7 @@
               <th>Actual Source</th>
               <th>Ideal Source</th>
               <th style="text-align:center">Settled?</th>
+              <th>Card / Statement</th>
               <th></th>
             </tr>
           </thead>
@@ -601,7 +602,7 @@ function renderTxTable() {
 
   const tbody = document.getElementById('tx-body');
   if (!sorted.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="no-data">No transactions found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="no-data">No transactions found.</td></tr>';
     return;
   }
 
@@ -645,6 +646,7 @@ function renderTxTable() {
         <input type="checkbox" class="inline-check" ${t.settled?'checked':''}
                onchange="patchTx(${t.id},{settled:this.checked?1:0,settled_date:this.checked?new Date().toISOString().slice(0,10):null})">
       </td>
+      <td style="white-space:nowrap;font-size:12px;color:#6e6e73">${stmtRef(t.bank, t.statement_date, t.upload_statement_month)}</td>
       <td style="text-align:center">
         <button class="btn-del" onclick="deleteTx(${t.id})" title="Delete transaction">✕</button>
       </td>
