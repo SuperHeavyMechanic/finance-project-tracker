@@ -1,3 +1,14 @@
+GLOBAL_RULES = {
+    'openai': 'OTHERS',
+    'chatgpt': 'OTHERS',
+    'anthropic': 'OTHERS',
+    'claude.ai': 'OTHERS',
+    'midjourney': 'OTHERS',
+    'perplexity': 'OTHERS',
+    'github copilot': 'OTHERS',
+    'copilot': 'OTHERS',
+}
+
 ACCOUNT_RULES = {
     'BNI': {
         'grab': 'TRANSPORTATION',
@@ -32,24 +43,28 @@ def get_rules_for_account(account_name: str) -> dict:
 
 
 def apply_rules(transactions: list, account_name: str) -> list:
-    rules = get_rules_for_account(account_name)
-    if not rules:
-        return transactions
+    card_rules = get_rules_for_account(account_name)
     for t in transactions:
         desc_lower = (t.get('description') or '').lower()
-        for merchant_kw, category in rules.items():
-            if merchant_kw in desc_lower:
-                t['category'] = category
+        # Global rules first, then card-specific (card overrides global)
+        for kw, cat in GLOBAL_RULES.items():
+            if kw in desc_lower:
+                t['category'] = cat
+                break
+        for kw, cat in card_rules.items():
+            if kw in desc_lower:
+                t['category'] = cat
                 break
     return transactions
 
 
 def build_rules_prompt(account_name: str) -> str:
-    rules = get_rules_for_account(account_name)
-    if not rules:
+    card_rules = get_rules_for_account(account_name)
+    combined = {**GLOBAL_RULES, **card_rules}  # card overrides global
+    if not combined:
         return ''
     lines = [
         f'- If description contains "{kw}" (case-insensitive), category must be "{cat}"'
-        for kw, cat in rules.items()
+        for kw, cat in combined.items()
     ]
     return 'Card-specific category overrides (apply these first, they take priority):\n' + '\n'.join(lines)

@@ -12,7 +12,7 @@ from db import (init_db, get_accounts, save_upload, check_duplicate,
                 get_transactions, update_transaction, delete_transaction,
                 get_dashboard_data, get_settlements, get_statements,
                 parse_date, _dominant_month)
-# from rules import apply_rules, build_rules_prompt  # disabled; see rules.py to re-enable
+from rules import apply_rules, build_rules_prompt
 
 load_dotenv()
 
@@ -118,7 +118,7 @@ def api_upload():
 
     all_accounts = get_accounts()
     account_name = next((a['name'] for a in all_accounts if a['id'] == account_id), '')
-    prompt_text = build_extraction_prompt()  # build_rules_prompt(account_name) disabled
+    prompt_text = build_extraction_prompt(build_rules_prompt(account_name))
 
     try:
         response = client.messages.create(
@@ -141,7 +141,7 @@ def api_upload():
             extracted = parsed.get('transactions', [])
             statement_date = parsed.get('statement_date')
 
-        # apply_rules(extracted, account_name)  # disabled; see rules.py to re-enable
+        apply_rules(extracted, account_name)
         for t in extracted:
             t['date_parsed'] = parse_date(t.get('date', ''))
 
