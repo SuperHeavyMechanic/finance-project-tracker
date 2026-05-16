@@ -613,15 +613,27 @@ function renderTxTable() {
     return;
   }
 
-  // populate select-by-statement dropdown
+  // populate select-by-statement dropdown (one entry per upload, using statement_date for label)
   const stmtSel = document.getElementById('stmt-select');
   if (stmtSel) {
     const prev = stmtSel.value;
-    const stmtKeys = [...new Set(txRows.map(t => `${t.bank}||${t.upload_statement_month}`))].sort();
+    const uploadMap = new Map();
+    txRows.forEach(t => { if (t.upload_id && !uploadMap.has(t.upload_id)) uploadMap.set(t.upload_id, t); });
+    const uploads = [...uploadMap.values()].sort((a, b) => (a.upload_statement_month||'') < (b.upload_statement_month||'') ? -1 : 1);
     stmtSel.innerHTML = '<option value="">Select by statement…</option>' +
-      stmtKeys.map(k => {
-        const [bank, ym] = k.split('||');
-        return `<option value="${k}">CC ${(bank||'').toUpperCase()} · ${fmtMonth(ym)}</option>`;
+      uploads.map(u => {
+        const bank = (u.bank || '').toUpperCase();
+        let dateLabel = fmtMonth(u.upload_statement_month);
+        if (u.statement_date) {
+          const sd = u.statement_date.includes('-')
+            ? new Date(u.statement_date + 'T00:00:00')
+            : (() => { const [dd,mm,yyyy] = u.statement_date.split('/'); return new Date(`${yyyy}-${mm}-${dd}T00:00:00`); })();
+          if (!isNaN(sd)) {
+            const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][sd.getMonth()];
+            dateLabel = `${String(sd.getDate()).padStart(2,'0')}-${mon}-${String(sd.getFullYear()).slice(2)}`;
+          }
+        }
+        return `<option value="${u.upload_id}">CC ${bank} · ${dateLabel}</option>`;
       }).join('');
     stmtSel.value = prev;
   }
@@ -741,13 +753,12 @@ function toggleAllTx(checked) {
   renderTxTable();
 }
 
-function selectByStatement(stmtKey) {
-  if (!stmtKey) return;
-  txRows.forEach(t => {
-    if (`${t.bank}||${t.upload_statement_month}` === stmtKey) selectedTxIds.add(t.id);
-  });
+function selectByStatement(uploadId) {
+  if (!uploadId) return;
+  const uid = parseInt(uploadId);
+  txRows.forEach(t => { if (t.upload_id === uid) selectedTxIds.add(t.id); });
   renderTxTable();
-  document.getElementById('stmt-select').value = stmtKey;
+  document.getElementById('stmt-select').value = uploadId;
 }
 
 function exportCSV() {
