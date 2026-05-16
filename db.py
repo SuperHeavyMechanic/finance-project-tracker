@@ -214,6 +214,23 @@ def update_transaction(tx_id, fields):
     conn.commit()
     conn.close()
 
+def get_transactions_by_ids(ids):
+    if not ids:
+        return []
+    conn = get_db()
+    placeholders = ','.join('?' * len(ids))
+    rows = conn.execute(f'''
+        SELECT t.*, a.name AS account_name, a.owner AS account_owner, a.bank,
+               u.statement_date, u.statement_month AS upload_statement_month, u.filename AS upload_filename
+        FROM transactions t
+        JOIN accounts a ON a.id = t.account_id
+        LEFT JOIN uploads u ON u.id = t.upload_id
+        WHERE t.id IN ({placeholders})
+        ORDER BY t.date_parsed DESC, t.id DESC
+    ''', ids).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
 def delete_transaction(tx_id):
     conn = get_db()
     conn.execute('DELETE FROM transactions WHERE id=?', (tx_id,))

@@ -197,7 +197,12 @@
   <div id="view-transactions" class="view">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
       <div class="page-title" style="margin:0">Transactions</div>
-      <button class="btn btn-outline btn-sm" onclick="exportCSV()">Export CSV</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select id="stmt-select" class="filter-select" style="min-width:180px" onchange="selectByStatement(this.value)">
+          <option value="">Select by statement…</option>
+        </select>
+        <button class="btn btn-outline btn-sm" id="export-btn" onclick="exportCSV()">Export CSV</button>
+      </div>
     </div>
     <div class="table-wrap">
       <div class="table-controls">
@@ -225,6 +230,7 @@
         <table>
           <thead>
             <tr>
+              <th style="text-align:center"><input type="checkbox" id="chk-all" onchange="toggleAllTx(this.checked)"></th>
               <th onclick="txSort('date_parsed')">Date</th>
               <th onclick="txSort('category')">Category</th>
               <th onclick="txSort('description')">Expense Items Detail</th>
@@ -377,6 +383,7 @@ let dashMonth = null;
 let txSortKey = 'date_parsed';
 let txSortDir = -1;
 let txRows = [];
+let selectedTxIds = new Set();
 let pendingDuplicate = null;
 
 // ── ROUTER ──
@@ -602,16 +609,39 @@ function renderTxTable() {
 
   const tbody = document.getElementById('tx-body');
   if (!sorted.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="no-data">No transactions found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="no-data">No transactions found.</td></tr>';
     return;
   }
+
+  // populate select-by-statement dropdown
+  const stmtSel = document.getElementById('stmt-select');
+  if (stmtSel) {
+    const prev = stmtSel.value;
+    const stmtKeys = [...new Set(txRows.map(t => `${t.bank}||${t.upload_statement_month}`))].sort();
+    stmtSel.innerHTML = '<option value="">Select by statement…</option>' +
+      stmtKeys.map(k => {
+        const [bank, ym] = k.split('||');
+        return `<option value="${k}">CC ${(bank||'').toUpperCase()} · ${fmtMonth(ym)}</option>`;
+      }).join('');
+    stmtSel.value = prev;
+  }
+
+  // update export button label
+  const exportBtn = document.getElementById('export-btn');
+  if (exportBtn) exportBtn.textContent = selectedTxIds.size > 0 ? `Export ${selectedTxIds.size} selected` : 'Export CSV';
+
+  // update select-all checkbox state
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) chkAll.checked = sorted.length > 0 && sorted.every(t => selectedTxIds.has(t.id));
 
   tbody.innerHTML = sorted.map(t => {
     const catOpts = CATEGORIES.map(c => `<option value="${c}" ${c===t.category?'selected':''}>${c}</option>`).join('');
     const actualOpts = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===t.paid_by?'selected':''}>${o}</option>`).join('');
     const idealOpts  = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===(t.ideal_paid_by||'')?'selected':''}>${o}</option>`).join('');
     const amtCls = t.amount < 0 ? 'amount-neg' : '';
+    const checked = selectedTxIds.has(t.id) ? 'checked' : '';
     return `<tr>
+      <td style="text-align:center"><input type="checkbox" class="tx-chk inline-check" data-id="${t.id}" ${checked} onchange="toggleTxSel(${t.id},this.checked)"></td>
       <td style="white-space:nowrap;color:#6e6e73">${fmtDate(t.date_parsed)}</td>
       <td>
         <select class="inline-select cat-badge ${CAT_CLASS[t.category]||'cat-OTHERS'}"
@@ -697,7 +727,34 @@ async function deleteTx(id) {
   renderTxTable();
 }
 
+function toggleTxSel(id, checked) {
+  if (checked) selectedTxIds.add(id);
+  else selectedTxIds.delete(id);
+  const exportBtn = document.getElementById('export-btn');
+  if (exportBtn) exportBtn.textContent = selectedTxIds.size > 0 ? `Export ${selectedTxIds.size} selected` : 'Export CSV';
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) chkAll.checked = txRows.length > 0 && txRows.every(t => selectedTxIds.has(t.id));
+}
+
+function toggleAllTx(checked) {
+  txRows.forEach(t => { if (checked) selectedTxIds.add(t.id); else selectedTxIds.delete(t.id); });
+  renderTxTable();
+}
+
+function selectByStatement(stmtKey) {
+  if (!stmtKey) return;
+  txRows.forEach(t => {
+    if (`${t.bank}||${t.upload_statement_month}` === stmtKey) selectedTxIds.add(t.id);
+  });
+  renderTxTable();
+  document.getElementById('stmt-select').value = stmtKey;
+}
+
 function exportCSV() {
+  if (selectedTxIds.size > 0) {
+    window.location.href = '/api/export?ids=' + [...selectedTxIds].join(',');
+    return;
+  }
   const params = new URLSearchParams();
   const q   = document.getElementById('tx-search').value;
   const own = document.getElementById('tx-owner').value;

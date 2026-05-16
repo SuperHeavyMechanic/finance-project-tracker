@@ -9,7 +9,7 @@ import anthropic
 import pypdf
 
 from db import (init_db, get_accounts, save_upload, check_duplicate,
-                get_transactions, update_transaction, delete_transaction,
+                get_transactions, get_transactions_by_ids, update_transaction, delete_transaction,
                 get_dashboard_data, get_settlements, get_statements,
                 parse_date, _dominant_month)
 from rules import apply_rules, build_rules_prompt
@@ -221,26 +221,63 @@ def api_statements():
     return jsonify(get_statements())
 
 
+def _csv_date(date_parsed):
+    if not date_parsed:
+        return ''
+    parts = date_parsed.split('-')
+    if len(parts) != 3:
+        return date_parsed
+    y, m, d = parts
+    months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    return f"{d}-{months[int(m)-1]}-{y[2:]}"
+
+def _csv_month(ym):
+    if not ym:
+        return ''
+    parts = ym.split('-')
+    if len(parts) != 2:
+        return ym
+    y, m = parts
+    months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    return f"{months[int(m)-1]}-{y[2:]}"
+
 @app.route('/api/export')
 def api_export():
-    rows = get_transactions(
-        owner=request.args.get('owner'),
-        month=request.args.get('month'),
-        account_id=request.args.get('account_id'),
-        category=request.args.get('category'),
-        search=request.args.get('q'),
-    )
+    ids_param = request.args.get('ids')
+    if ids_param:
+        ids = [int(i) for i in ids_param.split(',') if i.strip().isdigit()]
+        rows = get_transactions_by_ids(ids)
+    else:
+        rows = get_transactions(
+            owner=request.args.get('owner'),
+            month=request.args.get('month'),
+            account_id=request.args.get('account_id'),
+            category=request.args.get('category'),
+            search=request.args.get('q'),
+        )
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(['Date', 'Description', 'Amount (IDR)', 'Currency', 'Orig Amount', 'Orig Currency',
-                'Category', 'Account', 'Owner', 'Real Expense', 'Paid By', 'Settled'])
+    w.writerow(['Date', 'Category', 'Expense Items Detail', 'Amount (Rp)',
+                'Real expenses?', 'Paid By', 'Actual Source', 'Ideal Source',
+                'Settled?', 'Card / Statement'])
     for r in rows:
+        amt = r['amount']
+        if r.get('original_currency') and r.get('original_currency') != 'IDR':
+            amt_str = f"{amt} ({r['original_currency']} {r['original_amount']})"
+        else:
+            amt_str = amt
+        stmt = f"CC {(r['bank'] or '').upper()} · {_csv_month(r['upload_statement_month'])}"
         w.writerow([
-            r['date'], r['description'], r['amount'], r['currency'],
-            r['original_amount'] or '', r['original_currency'] or '',
-            r['category'], r['account_name'], r['account_owner'],
-            'Yes' if r['is_real_expense'] else 'No',
-            r['paid_by'], 'Yes' if r['settled'] else 'No',
+            _csv_date(r['date_parsed']),
+            r['category'],
+            r['description'],
+            amt_str,
+            'YES' if r['is_real_expense'] else 'NO',
+            r['account_owner'],
+            r['paid_by'],
+            r['ideal_paid_by'] or '',
+            'YES' if r['settled'] else 'NO',
+            stmt,
         ])
     return Response(buf.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': 'attachment; filename=transactions.csv'})
