@@ -228,6 +228,29 @@
     .preview-tbl { width: 100%; font-size: 12px; border-collapse: collapse; }
     .preview-tbl th { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e0e0e0; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #8e8e93; background: #f9f9fb; }
     .preview-tbl td { padding: 6px 8px; border-bottom: 1px solid #f0f0f2; }
+
+    /* ── REVIEW MODAL ── */
+    .review-overlay { display: none; position: fixed; inset: 0; background: #fff; z-index: 700; flex-direction: column; }
+    .review-overlay.visible { display: flex; }
+    .review-header { padding: 18px 32px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: #fff; }
+    .review-body { flex: 1; overflow-y: auto; padding: 24px 32px; }
+    .review-footer { padding: 14px 32px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; background: #fff; }
+    .review-section { margin-bottom: 28px; }
+    .review-section-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .review-section-hd .badge { padding: 3px 10px; border-radius: 980px; font-size: 11px; font-weight: 700; }
+    .badge-db { background: #ffe4e4; color: #b91c1c; }
+    .badge-cr { background: #dcfce7; color: #166534; }
+    .review-section-hd .summary { font-size: 13px; color: #6e6e73; }
+    .review-tbl { width: 100%; font-size: 13px; border-collapse: collapse; }
+    .review-tbl th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; color: #6e6e73; text-transform: uppercase; letter-spacing: .04em; background: #f9f9fb; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+    .review-tbl td { padding: 7px 12px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; }
+    .review-tbl tbody tr:last-child td { border-bottom: none; }
+    .review-tbl tbody tr:hover td { background: #fafafa; }
+    .review-input { width: 100%; min-width: 160px; padding: 3px 7px; border: 1px solid #d0d0d5; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; }
+    .review-input:focus { border-color: #0071e3; outline: none; }
+    .review-num-input { width: 110px; padding: 3px 7px; border: 1px solid #d0d0d5; border-radius: 6px; font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+    .review-num-input:focus { border-color: #0071e3; outline: none; }
+    .pending-badge { display: inline-block; padding: 2px 9px; border-radius: 980px; font-size: 11px; font-weight: 700; background: #fef3c7; color: #92400e; }
   </style>
 </head>
 <body>
@@ -422,6 +445,7 @@
       </div>
       <div class="error-box" id="up-error"></div>
       <div class="success-box" id="up-success"></div>
+      <button class="btn btn-sm" id="up-review-btn" style="display:none;margin-top:10px" onclick="openReviewModal(pendingUploadId)">Review now →</button>
 
       <!-- duplicate warning -->
       <div id="up-duplicate" style="display:none;margin-top:16px;" class="card">
@@ -458,6 +482,21 @@
   </div>
 </div>
 
+<!-- ── REVIEW MODAL ── -->
+<div class="review-overlay" id="review-modal">
+  <div class="review-header">
+    <div>
+      <div id="review-title" style="font-size:18px;font-weight:700;"></div>
+      <div id="review-sub" style="font-size:13px;color:#6e6e73;margin-top:3px;"></div>
+    </div>
+  </div>
+  <div class="review-body" id="review-body"></div>
+  <div class="review-footer">
+    <button class="btn btn-danger btn-sm" id="review-discard-btn">Discard upload</button>
+    <button class="btn btn-sm" id="review-confirm-btn">Confirm — add to tracker →</button>
+  </div>
+</div>
+
 <script>
 // ── STATE ──
 const CATEGORIES = [
@@ -491,6 +530,7 @@ let txSortDir = -1;
 let txRows = [];
 let selectedTxIds = new Set();
 let pendingDuplicate = null;
+let pendingUploadId = null;
 
 // ── ROUTER ──
 document.querySelectorAll('nav a').forEach(a => {
@@ -1120,9 +1160,10 @@ async function loadStatements() {
     const acc = group.account;
     if (!group.uploads.length) return '';
     const rows = group.uploads.map(u => {
-      const changed = u.active_count !== u.original_count || Math.abs((u.active_total||0) - (u.original_total||0)) > 0.5;
+      const isPending = (u.staged_count || 0) > 0 && (u.active_count || 0) === 0;
+      const changed = !isPending && (u.active_count !== u.original_count || Math.abs((u.active_total||0) - (u.original_total||0)) > 0.5);
       const deletedCount = (u.original_count||0) - (u.active_count||0);
-      return `<tr>
+      return `<tr${isPending ? ' style="background:#fffbeb;"' : ''}>
         <td style="white-space:nowrap;font-weight:500">${stmtRef(acc.bank, u.statement_date, u.statement_month)}</td>
         <td style="font-size:12px;color:#6e6e73;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(u.filename||'')}">${esc(u.filename||'—')}</td>
         <td style="white-space:nowrap;font-size:12px;color:#6e6e73">${(u.uploaded_at||'').slice(0,10)||'—'}</td>
@@ -1131,8 +1172,15 @@ async function loadStatements() {
           <span style="font-size:12px">${fmtAmount(u.original_total)}</span>
         </td>
         <td style="text-align:right;white-space:nowrap;${changed?'color:#8e8e93':''}">
-          ${u.active_count||0} txn${deletedCount>0?` <span style="color:#ff3b30;font-size:11px">(-${deletedCount})</span>`:''}
-          <br><span style="font-size:12px">${fmtAmount(u.active_total)}</span>
+          ${isPending ? '<span style="color:#8e8e93;font-size:12px;">—</span>' :
+            `${u.active_count||0} txn${deletedCount>0?` <span style="color:#ff3b30;font-size:11px">(-${deletedCount})</span>`:''}
+            <br><span style="font-size:12px">${fmtAmount(u.active_total)}</span>`}
+        </td>
+        <td style="white-space:nowrap;">
+          ${isPending ? `
+            <span class="pending-badge">Pending Review</span>
+            <button class="btn btn-sm btn-outline" style="margin-left:8px;font-size:11px;padding:4px 10px;" onclick="openReviewModal(${u.id})">Review →</button>
+          ` : ''}
         </td>
       </tr>`;
     }).join('');
@@ -1143,6 +1191,7 @@ async function loadStatements() {
           <th>Statement</th><th>Filename</th><th>Uploaded</th>
           <th style="text-align:right">Extracted</th>
           <th style="text-align:right">Active</th>
+          <th>Status</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table></div></div>
@@ -1233,7 +1282,9 @@ async function doUpload() {
       return;
     }
 
-    showSuccess('up-success', `✓ ${data.count} transactions added · ${fmtMonth(data.statement_month)}`);
+    pendingUploadId = data.upload_id;
+    showSuccess('up-success', `✓ ${data.count} transactions staged · ${fmtMonth(data.statement_month)}`);
+    document.getElementById('up-review-btn').style.display = 'inline-block';
     resetUpload();
     await fetchAccounts();
   } catch(e) {
@@ -1248,7 +1299,9 @@ async function confirmDuplicate() {
   const res = await fetch('/api/upload/confirm', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(pendingDuplicate)});
   const data = await res.json();
   hideUploadState();
-  showSuccess('up-success', `✓ ${data.count} transactions added · ${fmtMonth(data.statement_month)}`);
+  pendingUploadId = data.upload_id;
+  showSuccess('up-success', `✓ ${data.count} transactions staged · ${fmtMonth(data.statement_month)}`);
+  document.getElementById('up-review-btn').style.display = 'inline-block';
   resetUpload();
   await fetchAccounts();
 }
@@ -1274,6 +1327,7 @@ function hideUploadState() {
     el.classList.remove('visible');
   });
   document.getElementById('up-duplicate').style.display = 'none';
+  document.getElementById('up-review-btn').style.display = 'none';
 }
 function showStatus(id, msg) {
   const el = document.getElementById(id);
@@ -1286,6 +1340,178 @@ function showSuccess(id, msg) { const el = document.getElementById(id); el.textC
 
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── REVIEW MODAL ──
+async function openReviewModal(uploadId) {
+  if (!uploadId) return;
+  const rows = await fetch(`/api/uploads/${uploadId}/staged`).then(r => r.json());
+  const overlay = document.getElementById('review-modal');
+  overlay.classList.add('visible');
+
+  const accountType = rows.length > 0 ? (rows[0].account_type || 'credit') : 'credit';
+  const accName = rows.length > 0 ? rows[0].account_name : '';
+  const stmtMonth = rows.length > 0 ? rows[0].statement_month : '';
+  const dbRows = rows.filter(r => r.transaction_type === 'DB');
+  const crRows = rows.filter(r => r.transaction_type === 'CR');
+
+  document.getElementById('review-title').textContent = `Review: ${accName}`;
+  document.getElementById('review-sub').textContent = `${rows.length} transactions staged · ${fmtMonth(stmtMonth)}`;
+  document.getElementById('review-discard-btn').onclick = () => discardReview(uploadId);
+  document.getElementById('review-confirm-btn').onclick = () => confirmReview(uploadId);
+  document.getElementById('review-confirm-btn').disabled = false;
+  document.getElementById('review-confirm-btn').textContent = accountType === 'debit'
+    ? `Confirm — add ${dbRows.length} DB to tracker →`
+    : `Confirm — add to tracker →`;
+
+  renderReviewContent(dbRows, crRows, accountType);
+}
+
+function renderReviewContent(dbRows, crRows, accountType) {
+  const body = document.getElementById('review-body');
+  if (accountType === 'debit') {
+    const dbTotal = dbRows.reduce((s, r) => s + (r.amount || 0), 0);
+    const crTotal = crRows.reduce((s, r) => s + (r.amount || 0), 0);
+    body.innerHTML = `
+      <div class="review-section">
+        <div class="review-section-hd">
+          <span class="badge badge-db">Money Out (DB)</span>
+          <span class="summary">${dbRows.length} transactions · ${fmtAmount(dbTotal)}</span>
+        </div>
+        <div class="table-wrap">${renderStagedTable(dbRows)}</div>
+      </div>
+      <div class="review-section">
+        <div class="review-section-hd">
+          <span class="badge badge-cr">Money In (CR)</span>
+          <span class="summary">${crRows.length} transactions · ${fmtAmount(crTotal)}</span>
+          <span style="font-size:11px;color:#8e8e93;">Read-only · for context only, will not be confirmed</span>
+        </div>
+        <div class="table-wrap">${renderCRTable(crRows)}</div>
+      </div>
+    `;
+  } else {
+    const total = dbRows.reduce((s, r) => s + (r.amount || 0), 0);
+    body.innerHTML = `
+      <div class="review-section">
+        <div class="review-section-hd">
+          <span class="summary">${dbRows.length} transactions · ${fmtAmount(total)}</span>
+        </div>
+        <div class="table-wrap">${renderStagedTable(dbRows)}</div>
+      </div>
+    `;
+  }
+}
+
+function renderStagedTable(rows) {
+  if (!rows.length) return '<div class="no-data" style="padding:24px;">No transactions.</div>';
+  return `<table class="review-tbl">
+    <thead><tr>
+      <th style="width:90px">Date</th>
+      <th style="width:160px">Category</th>
+      <th>Description</th>
+      <th style="width:120px;text-align:right">Amount</th>
+      <th style="width:48px;text-align:center">Real?</th>
+      <th style="width:32px;"></th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(r => renderStagedRow(r)).join('')}
+    </tbody>
+  </table>`;
+}
+
+function renderStagedRow(r) {
+  const catOpts = CATEGORIES.map(c => `<option value="${c}" ${c===r.category?'selected':''}>${c}</option>`).join('');
+  const catCls = CAT_CLASS[r.category] || 'cat-OTHERS';
+  return `<tr id="staged-row-${r.id}">
+    <td style="white-space:nowrap;color:#6e6e73;">${fmtDate(r.date_parsed)}</td>
+    <td>
+      <select class="inline-select cat-badge ${catCls}"
+              onchange="patchStagedRow(${r.id},{category:this.value},this,'cat-badge',CAT_CLASS)">
+        ${catOpts}
+      </select>
+    </td>
+    <td>
+      <input type="text" class="review-input" value="${esc(r.description||'')}"
+             onblur="patchStagedRow(${r.id},{description:this.value})"
+             onkeydown="if(event.key==='Enter')this.blur()">
+    </td>
+    <td>
+      <input type="number" class="review-num-input" value="${r.amount||0}" step="1"
+             onblur="patchStagedRow(${r.id},{amount:parseFloat(this.value)||0})"
+             onkeydown="if(event.key==='Enter')this.blur()">
+    </td>
+    <td style="text-align:center;">
+      <input type="checkbox" class="inline-check" ${r.is_real_expense?'checked':''}
+             onchange="patchStagedRow(${r.id},{is_real_expense:this.checked?1:0})">
+    </td>
+    <td style="text-align:center;">
+      <button class="btn-del" onclick="deleteStagedRow(${r.id})" title="Remove">✕</button>
+    </td>
+  </tr>`;
+}
+
+function renderCRTable(rows) {
+  if (!rows.length) return '<div class="no-data" style="padding:24px;">No incoming transactions.</div>';
+  return `<table class="review-tbl">
+    <thead><tr>
+      <th style="width:90px">Date</th>
+      <th>Description</th>
+      <th style="width:130px;text-align:right">Amount</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(r => `<tr>
+        <td style="white-space:nowrap;color:#6e6e73;">${fmtDate(r.date_parsed)}</td>
+        <td>${esc(r.description||'—')}</td>
+        <td style="text-align:right;font-weight:600;color:#34c759;">${fmtAmount(r.amount)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function patchStagedRow(txId, fields, el, badgeClass, classMap) {
+  await fetch(`/api/staged/${txId}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(fields)});
+  if (el && badgeClass && classMap) {
+    const val = fields[Object.keys(fields)[0]];
+    const prefix = typeof classMap === 'object' ? (classMap[val] || '') : classMap + val;
+    el.className = `inline-select ${badgeClass} ${prefix}`;
+  }
+}
+
+async function deleteStagedRow(txId) {
+  await fetch(`/api/staged/${txId}`, {method: 'DELETE'});
+  const row = document.getElementById(`staged-row-${txId}`);
+  if (row) row.remove();
+}
+
+async function confirmReview(uploadId) {
+  const btn = document.getElementById('review-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Confirming…';
+  try {
+    const res = await fetch(`/api/uploads/${uploadId}/confirm`, {method: 'POST'});
+    const data = await res.json();
+    closeReviewModal();
+    await fetchAccounts();
+    const currentView = document.querySelector('.view.active')?.id?.replace('view-', '');
+    if (currentView === 'statements') loadStatements();
+    else navigate('transactions');
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Confirm — add to tracker →';
+  }
+}
+
+async function discardReview(uploadId) {
+  if (!confirm('Discard this upload? All staged transactions will be deleted and the upload will be removed. This cannot be undone.')) return;
+  await fetch(`/api/uploads/${uploadId}`, {method: 'DELETE'});
+  closeReviewModal();
+  await fetchAccounts();
+  const currentView = document.querySelector('.view.active')?.id?.replace('view-', '');
+  if (currentView === 'statements') loadStatements();
+}
+
+function closeReviewModal() {
+  document.getElementById('review-modal').classList.remove('visible');
 }
 
 // ── INIT ──

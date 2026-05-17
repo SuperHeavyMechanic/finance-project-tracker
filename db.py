@@ -6,9 +6,10 @@ from datetime import date
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'finance.db')
 
 SEED_ACCOUNTS = [
-    {'owner': 'SHAN',  'name': 'CC BNI VISA GARUDA',        'bank': 'BNI',           'last_four': '3738'},
-    {'owner': 'SHAN',  'name': 'CC MANDIRI VISA SIGNATURE',  'bank': 'Mandiri',        'last_four': '5856'},
-    {'owner': 'JOINT', 'name': 'CC JENIUS',                  'bank': 'Jenius (BTPN)',  'last_four': '9XXX'},
+    {'owner': 'SHAN',  'name': 'CC BNI VISA GARUDA',        'bank': 'BNI',           'last_four': '3738', 'account_type': 'credit'},
+    {'owner': 'SHAN',  'name': 'CC MANDIRI VISA SIGNATURE',  'bank': 'Mandiri',        'last_four': '5856', 'account_type': 'credit'},
+    {'owner': 'JOINT', 'name': 'CC JENIUS',                  'bank': 'Jenius (BTPN)',  'last_four': '9XXX', 'account_type': 'credit'},
+    {'owner': 'SHAN',  'name': 'BCA Rekening Tahapan',       'bank': 'BCA',            'last_four': '4980', 'account_type': 'debit'},
 ]
 
 _MONTH_MAP = {
@@ -47,12 +48,13 @@ def init_db():
     conn = get_db()
     conn.executescript('''
         CREATE TABLE IF NOT EXISTS accounts (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            owner      TEXT NOT NULL,
-            name       TEXT NOT NULL,
-            bank       TEXT,
-            last_four  TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner        TEXT NOT NULL,
+            name         TEXT NOT NULL,
+            bank         TEXT,
+            last_four    TEXT,
+            account_type TEXT DEFAULT 'credit',
+            created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS uploads (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,11 +82,26 @@ def init_db():
             settled_date      DATE,
             created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS staged_transactions (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            upload_id        INTEGER NOT NULL REFERENCES uploads(id),
+            account_id       INTEGER NOT NULL REFERENCES accounts(id),
+            date             TEXT,
+            date_parsed      TEXT,
+            description      TEXT,
+            amount           REAL,
+            category         TEXT,
+            is_real_expense  INTEGER DEFAULT 1,
+            transaction_type TEXT DEFAULT 'DB',
+            original_currency TEXT,
+            original_amount  REAL
+        );
     ''')
     for _col_sql in [
         "ALTER TABLE uploads ADD COLUMN statement_date TEXT",
         "ALTER TABLE uploads ADD COLUMN original_total_amount REAL DEFAULT 0",
         "ALTER TABLE transactions ADD COLUMN ideal_paid_by TEXT",
+        "ALTER TABLE accounts ADD COLUMN account_type TEXT DEFAULT 'credit'",
     ]:
         try:
             conn.execute(_col_sql)
@@ -100,11 +117,15 @@ def init_db():
             conn.execute('UPDATE uploads SET statement_month=? WHERE id=?', (parsed[:7], u['id']))
     conn.commit()
 
-    if conn.execute('SELECT COUNT(*) FROM accounts').fetchone()[0] == 0:
-        for a in SEED_ACCOUNTS:
+    for a in SEED_ACCOUNTS:
+        exists = conn.execute(
+            'SELECT id FROM accounts WHERE bank=? AND last_four=?',
+            (a['bank'], a['last_four'])
+        ).fetchone()
+        if not exists:
             conn.execute(
-                'INSERT INTO accounts (owner, name, bank, last_four) VALUES (?,?,?,?)',
-                (a['owner'], a['name'], a['bank'], a['last_four'])
+                'INSERT INTO accounts (owner, name, bank, last_four, account_type) VALUES (?,?,?,?,?)',
+                (a['owner'], a['name'], a['bank'], a['last_four'], a.get('account_type', 'credit'))
             )
     conn.commit()
     conn.close()
@@ -341,7 +362,8 @@ def get_statements():
                u.uploaded_at, u.transaction_count AS original_count,
                u.original_total_amount AS original_total,
                COUNT(t.id) AS active_count,
-               COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS active_total
+               COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS active_total,
+               (SELECT COUNT(*) FROM staged_transactions st WHERE st.upload_id = u.id) AS staged_count
         FROM uploads u
         LEFT JOIN transactions t ON t.upload_id = u.id
         GROUP BY u.id
@@ -359,3 +381,127 @@ def get_statements():
             result[aid] = {'account': acc_map[aid], 'uploads': []}
         result[aid]['uploads'].append(u)
     return list(result.values())
+
+
+def save_staged(account_id, filename, transactions, statement_date=None):
+    conn = get_db()
+    parsed_sd = parse_date(statement_date) if statement_date else None
+    stmt_month = parsed_sd[:7] if parsed_sd else _dominant_month(transactions)
+    original_total = sum(
+        (t.get('amount') or 0) for t in transactions
+        if (t.get('amount') or 0) > 0 and t.get('transaction_type', 'DB') == 'DB'
+    )
+
+    c = conn.cursor()
+    c.execute(
+        'INSERT INTO uploads (account_id, filename, statement_month, transaction_count, statement_date, original_total_amount) VALUES (?,?,?,?,?,?)',
+        (account_id, filename, stmt_month, len(transactions), statement_date, original_total)
+    )
+    upload_id = c.lastrowid
+
+    for t in transactions:
+        c.execute('''
+            INSERT INTO staged_transactions
+              (upload_id, account_id, date, date_parsed, description,
+               amount, category, is_real_expense, transaction_type,
+               original_currency, original_amount)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        ''', (
+            upload_id, account_id,
+            t.get('date'), t.get('date_parsed'),
+            t.get('description'),
+            t.get('amount', 0),
+            t.get('category', 'OTHERS'),
+            1 if t.get('is_real_expense', True) else 0,
+            t.get('transaction_type', 'DB'),
+            t.get('original_currency'),
+            t.get('original_amount'),
+        ))
+
+    conn.commit()
+    conn.close()
+    return upload_id, stmt_month
+
+
+def get_staged(upload_id):
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT s.*, a.name AS account_name, a.owner AS account_owner, a.bank, a.account_type,
+               u.statement_date, u.statement_month
+        FROM staged_transactions s
+        JOIN accounts a ON a.id = s.account_id
+        JOIN uploads u ON u.id = s.upload_id
+        WHERE s.upload_id=?
+        ORDER BY s.transaction_type DESC, s.id ASC
+    ''', (upload_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_staged(tx_id, fields):
+    allowed = {'category', 'description', 'amount', 'is_real_expense'}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    conn = get_db()
+    clause = ', '.join(f'{k}=?' for k in updates)
+    conn.execute(f'UPDATE staged_transactions SET {clause} WHERE id=?', list(updates.values()) + [tx_id])
+    conn.commit()
+    conn.close()
+
+
+def delete_staged_tx(tx_id):
+    conn = get_db()
+    conn.execute('DELETE FROM staged_transactions WHERE id=?', (tx_id,))
+    conn.commit()
+    conn.close()
+
+
+def confirm_upload(upload_id):
+    conn = get_db()
+    upload = conn.execute('SELECT account_id FROM uploads WHERE id=?', (upload_id,)).fetchone()
+    if not upload:
+        conn.close()
+        return 0
+    account = conn.execute('SELECT owner FROM accounts WHERE id=?', (upload['account_id'],)).fetchone()
+    owner = account['owner'] if account else 'SHAN'
+
+    staged = conn.execute(
+        "SELECT * FROM staged_transactions WHERE upload_id=? AND transaction_type='DB'",
+        (upload_id,)
+    ).fetchall()
+
+    c = conn.cursor()
+    for t in staged:
+        c.execute('''
+            INSERT INTO transactions
+              (upload_id, account_id, date, date_parsed, description,
+               amount, currency, original_amount, original_currency,
+               category, is_real_expense, paid_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        ''', (
+            upload_id, t['account_id'],
+            t['date'], t['date_parsed'],
+            t['description'],
+            t['amount'],
+            'IDR',
+            t['original_amount'],
+            t['original_currency'],
+            t['category'],
+            t['is_real_expense'],
+            owner,
+        ))
+
+    c.execute('UPDATE uploads SET transaction_count=? WHERE id=?', (len(staged), upload_id))
+    c.execute('DELETE FROM staged_transactions WHERE upload_id=?', (upload_id,))
+    conn.commit()
+    conn.close()
+    return len(staged)
+
+
+def discard_upload(upload_id):
+    conn = get_db()
+    conn.execute('DELETE FROM staged_transactions WHERE upload_id=?', (upload_id,))
+    conn.execute('DELETE FROM uploads WHERE id=?', (upload_id,))
+    conn.commit()
+    conn.close()

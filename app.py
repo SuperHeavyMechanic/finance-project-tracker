@@ -3,13 +3,15 @@ import base64
 import json
 import io
 import csv
+import calendar
 from flask import Flask, request, jsonify, render_template, Response
 from dotenv import load_dotenv
 import anthropic
 import pypdf
 
-from db import (init_db, get_accounts, save_upload, check_duplicate,
+from db import (init_db, get_accounts, save_upload, save_staged, check_duplicate,
                 get_transactions, get_transactions_by_ids, update_transaction, delete_transaction,
+                get_staged, update_staged, delete_staged_tx, confirm_upload, discard_upload,
                 get_dashboard_data, get_settlements, get_statements,
                 parse_date, _dominant_month)
 from rules import apply_rules, build_rules_prompt
@@ -26,6 +28,26 @@ CATEGORIES = [
     "SHOPPING", "HEALTHCARE", "DEBT REPAYMENT", "SAVINGS", "F&B",
     "OTHERS", "FAMILY", "VACATION", "BOOZE", "EDUCATION",
 ]
+
+INDO_MONTHS = {
+    'JANUARI': 1, 'FEBRUARI': 2, 'MARET': 3, 'APRIL': 4, 'MEI': 5, 'JUNI': 6,
+    'JULI': 7, 'AGUSTUS': 8, 'SEPTEMBER': 9, 'OKTOBER': 10, 'NOVEMBER': 11, 'DESEMBER': 12,
+    'JANUARY': 1, 'FEBRUARY': 2, 'MARCH': 3, 'MAY': 5, 'JUNE': 6,
+    'JULY': 7, 'AUGUST': 8, 'OCTOBER': 10, 'DECEMBER': 12,
+}
+
+def period_to_statement_date(period_str):
+    parts = (period_str or '').upper().strip().split()
+    if len(parts) == 2:
+        m = INDO_MONTHS.get(parts[0])
+        try:
+            y = int(parts[1])
+        except ValueError:
+            return None
+        if m and y:
+            last_day = calendar.monthrange(y, m)[1]
+            return f"{last_day:02d}/{m:02d}/{y}"
+    return None
 
 def build_extraction_prompt(rules_section=''):
     rules_block = f'\n\n{rules_section}' if rules_section else ''
@@ -54,6 +76,35 @@ Example:
     {{"date": "01/10/2024", "description": "GRAB", "amount": 45000, "currency": "IDR", "original_amount": null, "original_currency": null, "category": "TRANSPORTATION", "is_real_expense": true}},
     {{"date": "02/10/2024", "description": "NETFLIX", "amount": 154000, "currency": "IDR", "original_amount": 9.99, "original_currency": "USD", "category": "ENTERTAINMENT", "is_real_expense": true}},
     {{"date": "28/10/2024", "description": "PAYMENT RECEIVED", "amount": -5000000, "currency": "IDR", "original_amount": null, "original_currency": null, "category": "OTHERS", "is_real_expense": false}}
+  ]
+}}"""
+
+def build_debit_extraction_prompt(rules_section=''):
+    rules_block = f'\n\n{rules_section}' if rules_section else ''
+    return f"""You are a financial data extraction assistant. Analyze this BCA Rekening Tahapan (debit/bank) statement and extract every transaction.{rules_block}
+
+Return a JSON object with exactly two top-level fields:
+- period: the statement period as printed (e.g. "APRIL 2026")
+- transactions: an array of objects with these exact fields:
+  - date: transaction date string (keep original format, e.g. "01/04")
+  - description: clean, readable merchant/payee name. For QR transactions: use the merchant name (text after "00000.00"). For e-banking transfers: combine counterparty name and the free-text note into one readable line.
+  - amount: positive numeric IDR amount. No symbols or commas.
+  - transaction_type: "DB" for debit/outgoing, "CR" for credit/incoming
+  - category: one of exactly {json.dumps(CATEGORIES)}
+  - is_real_expense: true for actual expenses. false for: large round-number self-transfers, all CR rows (always false for CR).
+
+Rules:
+- Extract ALL rows including incoming (CR) transfers — they are shown in review for context only
+- Ignore Poket Valas pages (any section where MATA UANG ≠ IDR)
+- BIAYA ADM rows: extract as DB, category OTHERS, is_real_expense true
+- Return ONLY the raw JSON object, no markdown fences, no explanation
+
+Example:
+{{
+  "period": "APRIL 2026",
+  "transactions": [
+    {{"date": "01/04", "description": "Arya valet", "amount": 30000, "transaction_type": "DB", "category": "TRANSPORTATION", "is_real_expense": true}},
+    {{"date": "03/04", "description": "Transfer from FAHMIANDINI KHOIRU – Keg Azana 1 s.d 3 April", "amount": 560000, "transaction_type": "CR", "category": "OTHERS", "is_real_expense": false}}
   ]
 }}"""
 
@@ -117,8 +168,14 @@ def api_upload():
         content_block = {'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}}
 
     all_accounts = get_accounts()
-    account_name = next((a['name'] for a in all_accounts if a['id'] == account_id), '')
-    prompt_text = build_extraction_prompt(build_rules_prompt(account_name))
+    account = next((a for a in all_accounts if a['id'] == account_id), {})
+    account_name = account.get('name', '')
+    account_type = account.get('account_type', 'credit')
+
+    if account_type == 'debit':
+        prompt_text = build_debit_extraction_prompt(build_rules_prompt(account_name))
+    else:
+        prompt_text = build_extraction_prompt(build_rules_prompt(account_name))
 
     try:
         response = client.messages.create(
@@ -139,7 +196,11 @@ def api_upload():
             statement_date = None
         else:
             extracted = parsed.get('transactions', [])
-            statement_date = parsed.get('statement_date')
+            if account_type == 'debit':
+                period = parsed.get('period')
+                statement_date = period_to_statement_date(period) if period else None
+            else:
+                statement_date = parsed.get('statement_date')
 
         apply_rules(extracted, account_name)
         for t in extracted:
@@ -156,8 +217,8 @@ def api_upload():
                 'count': len(extracted),
             })
 
-        upload_id, stmt_month = save_upload(account_id, filename, extracted, statement_date=statement_date)
-        return jsonify({'success': True, 'upload_id': upload_id, 'count': len(extracted), 'statement_month': stmt_month})
+        upload_id, stmt_month = save_staged(account_id, filename, extracted, statement_date=statement_date)
+        return jsonify({'success': True, 'staged': True, 'upload_id': upload_id, 'count': len(extracted), 'statement_month': stmt_month})
 
     except json.JSONDecodeError as e:
         return jsonify({'error': f'Failed to parse extracted data: {e}'}), 500
@@ -170,11 +231,11 @@ def api_upload():
 @app.route('/api/upload/confirm', methods=['POST'])
 def api_upload_confirm():
     data = request.json or {}
-    upload_id, stmt_month = save_upload(
+    upload_id, stmt_month = save_staged(
         data['account_id'], data.get('filename', 'statement'), data.get('transactions', []),
         statement_date=data.get('statement_date'),
     )
-    return jsonify({'success': True, 'upload_id': upload_id, 'count': len(data.get('transactions', [])), 'statement_month': stmt_month})
+    return jsonify({'success': True, 'staged': True, 'upload_id': upload_id, 'count': len(data.get('transactions', [])), 'statement_month': stmt_month})
 
 
 @app.route('/api/transactions')
@@ -285,6 +346,35 @@ def api_export():
         ])
     return Response(buf.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': 'attachment; filename=transactions.csv'})
+
+
+@app.route('/api/uploads/<int:upload_id>/staged')
+def api_get_staged(upload_id):
+    return jsonify(get_staged(upload_id))
+
+
+@app.route('/api/staged/<int:tx_id>', methods=['PATCH'])
+def api_update_staged(tx_id):
+    update_staged(tx_id, request.json or {})
+    return jsonify({'ok': True})
+
+
+@app.route('/api/staged/<int:tx_id>', methods=['DELETE'])
+def api_delete_staged(tx_id):
+    delete_staged_tx(tx_id)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/uploads/<int:upload_id>/confirm', methods=['POST'])
+def api_confirm_upload(upload_id):
+    count = confirm_upload(upload_id)
+    return jsonify({'ok': True, 'confirmed_count': count})
+
+
+@app.route('/api/uploads/<int:upload_id>', methods=['DELETE'])
+def api_discard_upload(upload_id):
+    discard_upload(upload_id)
+    return jsonify({'ok': True})
 
 
 if __name__ == '__main__':
