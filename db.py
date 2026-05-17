@@ -182,7 +182,8 @@ def save_upload(account_id, filename, transactions, statement_date=None):
     return upload_id, stmt_month
 
 def get_transactions(owner=None, month=None, account_id=None, category=None,
-                     is_real_expense=None, unsettled=False, search=None):
+                     is_real_expense=None, unsettled=False, search=None,
+                     paid_by=None, ideal_paid_by=None, settled=None, upload_id=None):
     conn = get_db()
     q = '''
         SELECT t.*, a.name AS account_name, a.owner AS account_owner, a.bank,
@@ -207,6 +208,14 @@ def get_transactions(owner=None, month=None, account_id=None, category=None,
         q += ' AND t.settled=0 AND t.paid_by != a.owner'
     if search:
         q += ' AND t.description LIKE ?'; p.append(f'%{search}%')
+    if paid_by:
+        q += ' AND t.paid_by=?'; p.append(paid_by)
+    if ideal_paid_by:
+        q += ' AND t.ideal_paid_by=?'; p.append(ideal_paid_by)
+    if settled is not None:
+        q += ' AND t.settled=?'; p.append(1 if settled else 0)
+    if upload_id:
+        q += ' AND t.upload_id=?'; p.append(int(upload_id))
     q += ' ORDER BY t.date_parsed DESC, t.id DESC'
     rows = conn.execute(q, p).fetchall()
     conn.close()

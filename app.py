@@ -180,6 +180,7 @@ def api_upload_confirm():
 @app.route('/api/transactions')
 def api_transactions():
     is_real = request.args.get('is_real_expense')
+    settled_val = request.args.get('settled')
     rows = get_transactions(
         owner=request.args.get('owner'),
         month=request.args.get('month'),
@@ -188,6 +189,10 @@ def api_transactions():
         is_real_expense=None if is_real is None else (is_real == '1'),
         unsettled=request.args.get('unsettled') == '1',
         search=request.args.get('q'),
+        paid_by=request.args.get('paid_by'),
+        ideal_paid_by=request.args.get('ideal_paid_by'),
+        settled=None if settled_val is None else (settled_val == '1'),
+        upload_id=request.args.get('upload_id'),
     )
     return jsonify(rows)
 
@@ -255,6 +260,7 @@ def api_export():
             account_id=request.args.get('account_id'),
             category=request.args.get('category'),
             search=request.args.get('q'),
+            upload_id=request.args.get('upload_id'),
         )
     buf = io.StringIO()
     w = csv.writer(buf)

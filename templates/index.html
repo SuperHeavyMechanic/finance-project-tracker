@@ -158,6 +158,48 @@
       nav a { padding: 18px 10px; font-size: 13px; }
       td:nth-child(1) { display: none; }
     }
+
+    /* ── SELECTED ROW ── */
+    tr.tx-selected td { background: #eff6ff !important; }
+    tr.tx-selected td:first-child { border-left: 3px solid #0071e3; padding-left: 11px; }
+
+    /* ── FILTER SECTION ── */
+    .filter-section { padding: 12px 16px; border-bottom: 1px solid #e0e0e0; display: flex; flex-direction: column; gap: 8px; }
+    .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .filter-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8e8e93; flex-shrink: 0; width: 38px; }
+    .filter-clear-btn { font-size: 12px; color: #0071e3; background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px; margin-left: auto; flex-shrink: 0; }
+    .filter-clear-btn:hover { background: #f0f6ff; }
+
+    /* ── FLOATING ACTION BAR ── */
+    .action-bar { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(16px); background: #1d1d1f; color: #fff; padding: 10px 18px; border-radius: 980px; display: flex; align-items: center; gap: 10px; z-index: 500; box-shadow: 0 8px 32px rgba(0,0,0,.3); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+    .action-bar.visible { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+    .abar-count { font-size: 13px; font-weight: 600; padding-right: 10px; border-right: 1px solid rgba(255,255,255,.2); }
+    .abar-btn { background: rgba(255,255,255,.12); border: none; color: #fff; padding: 6px 14px; border-radius: 980px; font-size: 12px; font-weight: 500; cursor: pointer; transition: background .15s; }
+    .abar-btn:hover { background: rgba(255,255,255,.25); }
+    .abar-btn.danger:hover { background: #ff3b30; }
+    .abar-sep { width: 1px; height: 18px; background: rgba(255,255,255,.2); flex-shrink: 0; }
+    .abar-select { background: rgba(255,255,255,.12); border: none; color: #fff; padding: 6px 12px; border-radius: 980px; font-size: 12px; font-weight: 500; cursor: pointer; outline: none; max-width: 200px; }
+    .abar-select option { color: #1d1d1f; background: #fff; }
+
+    /* ── EXPORT MODAL ── */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 600; align-items: center; justify-content: center; }
+    .modal-overlay.visible { display: flex; }
+    .modal { background: #fff; border-radius: 20px; padding: 28px 32px; width: 100%; max-width: 560px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,.22); }
+    .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 20px; }
+    .modal-body { flex: 1; overflow-y: auto; }
+    .modal-footer { display: flex; gap: 8px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid #e0e0e0; margin-top: 16px; }
+    .modal-opt { border: 1.5px solid #e0e0e0; border-radius: 12px; padding: 16px; cursor: pointer; transition: border-color .15s, background .15s; margin-bottom: 10px; }
+    .modal-opt:hover { border-color: #0071e3; background: #f0f6ff; }
+    .modal-opt.disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+    .modal-opt .opt-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .modal-opt .opt-sub { font-size: 12px; color: #6e6e73; }
+    .preview-meta { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .pm-item { background: #f5f5f7; border-radius: 8px; padding: 8px 14px; }
+    .pm-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #8e8e93; margin-bottom: 2px; }
+    .pm-val { font-size: 14px; font-weight: 700; }
+    .preview-tbl { width: 100%; font-size: 12px; border-collapse: collapse; }
+    .preview-tbl th { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e0e0e0; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #8e8e93; background: #f9f9fb; }
+    .preview-tbl td { padding: 6px 8px; border-bottom: 1px solid #f0f0f2; }
   </style>
 </head>
 <body>
@@ -197,40 +239,55 @@
   <div id="view-transactions" class="view">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
       <div class="page-title" style="margin:0">Transactions</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <select id="stmt-select" class="filter-select" style="min-width:180px" onchange="selectByStatement(this.value)">
-          <option value="">Select by statement…</option>
-        </select>
-        <button class="btn btn-outline btn-sm" id="export-btn" onclick="exportCSV()">Export CSV</button>
-      </div>
+      <button class="btn btn-outline btn-sm" onclick="openExportModal()">Export CSV</button>
     </div>
     <div class="table-wrap">
-      <div class="table-controls">
-        <input class="search-input" id="tx-search" placeholder="Search…" oninput="loadTransactions()">
-        <select class="filter-select" id="tx-owner" onchange="loadTransactions()">
-          <option value="">All Owners</option>
-          <option>SHAN</option><option>JANICE</option><option>JOINT</option>
-        </select>
-        <select class="filter-select" id="tx-month" onchange="loadTransactions()">
-          <option value="">All Months</option>
-        </select>
-        <select class="filter-select" id="tx-account" onchange="loadTransactions()">
-          <option value="">All Accounts</option>
-        </select>
-        <select class="filter-select" id="tx-category" onchange="loadTransactions()">
-          <option value="">All Categories</option>
-        </select>
-        <select class="filter-select" id="tx-real" onchange="loadTransactions()">
-          <option value="">All</option>
-          <option value="1">Real expenses</option>
-          <option value="0">Non-expenses</option>
-        </select>
+      <div class="filter-section">
+        <div class="filter-row">
+          <span class="filter-tag">Filter</span>
+          <input class="search-input" id="tx-search" placeholder="Search…" oninput="loadTransactions()" style="flex:1;min-width:140px;">
+          <select class="filter-select" id="tx-month" onchange="loadTransactions()">
+            <option value="">All Months</option>
+          </select>
+          <select class="filter-select" id="tx-category" onchange="loadTransactions()">
+            <option value="">All Categories</option>
+          </select>
+          <select class="filter-select" id="tx-real" onchange="loadTransactions()">
+            <option value="">Real / Non</option>
+            <option value="1">Real expenses</option>
+            <option value="0">Non-expenses</option>
+          </select>
+          <button class="filter-clear-btn" onclick="clearFilters()">Clear all</button>
+        </div>
+        <div class="filter-row">
+          <span class="filter-tag" style="visibility:hidden">Filter</span>
+          <select class="filter-select" id="tx-owner" onchange="loadTransactions()">
+            <option value="">Paid By</option>
+            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
+          </select>
+          <select class="filter-select" id="tx-paid-by" onchange="loadTransactions()">
+            <option value="">Actual Source</option>
+            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
+          </select>
+          <select class="filter-select" id="tx-ideal-paid-by" onchange="loadTransactions()">
+            <option value="">Ideal Source</option>
+            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
+          </select>
+          <select class="filter-select" id="tx-settled" onchange="loadTransactions()">
+            <option value="">Settled / All</option>
+            <option value="1">Settled</option>
+            <option value="0">Unsettled</option>
+          </select>
+          <select class="filter-select" id="tx-upload" onchange="loadTransactions()" style="min-width:160px;">
+            <option value="">All Statements</option>
+          </select>
+        </div>
       </div>
       <div style="overflow-x:auto;">
         <table>
           <thead>
             <tr>
-              <th style="text-align:center"><input type="checkbox" id="chk-all" onchange="toggleAllTx(this.checked)"></th>
+              <th style="text-align:center;width:36px"><input type="checkbox" id="chk-all" onchange="toggleAllTx(this.checked)"></th>
               <th onclick="txSort('date_parsed')">Date</th>
               <th onclick="txSort('category')">Category</th>
               <th onclick="txSort('description')">Expense Items Detail</th>
@@ -351,6 +408,27 @@
   </div>
 
 </main>
+
+<!-- ── FLOATING ACTION BAR ── -->
+<div class="action-bar" id="action-bar">
+  <span class="abar-count" id="abar-count">0 selected</span>
+  <select class="abar-select" id="abar-cat" onchange="bulkReassignCategory(this.value)">
+    <option value="">Reassign category…</option>
+  </select>
+  <div class="abar-sep"></div>
+  <button class="abar-btn danger" onclick="bulkDelete()">Delete</button>
+  <div class="abar-sep"></div>
+  <button class="abar-btn" onclick="clearSelection()">✕ Clear</button>
+</div>
+
+<!-- ── EXPORT MODAL ── -->
+<div class="modal-overlay" id="export-modal" onclick="if(event.target===this)closeExportModal()">
+  <div class="modal">
+    <div class="modal-title" id="exp-modal-title">Export Transactions</div>
+    <div class="modal-body" id="exp-modal-body"></div>
+    <div class="modal-footer" id="exp-modal-footer"></div>
+  </div>
+</div>
 
 <script>
 // ── STATE ──
@@ -556,38 +634,77 @@ function renderTrend(trend) {
 }
 
 // ── TRANSACTIONS ──
-async function initTransactions() {
-  // populate month filter
-  const txRows = await api('/api/transactions');
-  const months = [...new Set(txRows.map(r => r.date_parsed?.slice(0,7)).filter(Boolean))].sort().reverse();
-  const monthSel = document.getElementById('tx-month');
-  const cur = monthSel.value;
-  monthSel.innerHTML = '<option value="">All Months</option>' +
-    months.map(m => `<option value="${m}" ${m===cur?'selected':''}>${fmtMonth(m)}</option>`).join('');
+let allTxRows = [];   // unfiltered set, for export preview and statement dropdown
+let allUploads = [];  // [{uploadId, label}], for export modal
+let exportScope = null;
 
-  // populate account filter
-  const accSel = document.getElementById('tx-account');
-  const curAcc = accSel.value;
-  accSel.innerHTML = '<option value="">All Accounts</option>' +
-    allAccounts.map(a => `<option value="${a.id}" ${a.id==curAcc?'selected':''}>${a.name}</option>`).join('');
+async function initTransactions() {
+  allTxRows = await api('/api/transactions');
+
+  // Populate month filter
+  const months = [...new Set(allTxRows.map(r => r.date_parsed?.slice(0,7)).filter(Boolean))].sort().reverse();
+  const monthSel = document.getElementById('tx-month');
+  const curMon = monthSel.value;
+  monthSel.innerHTML = '<option value="">All Months</option>' +
+    months.map(m => `<option value="${m}" ${m===curMon?'selected':''}>${fmtMonth(m)}</option>`).join('');
+
+  // Populate card statement filter from full unfiltered set
+  const uploadMap = new Map();
+  allTxRows.forEach(t => { if (t.upload_id && !uploadMap.has(t.upload_id)) uploadMap.set(t.upload_id, t); });
+  allUploads = [...uploadMap.values()]
+    .sort((a, b) => (a.upload_statement_month||'') > (b.upload_statement_month||'') ? -1 : 1)
+    .map(u => {
+      const bank = (u.bank || '').toUpperCase();
+      let dateLabel = fmtMonth(u.upload_statement_month);
+      if (u.statement_date) {
+        const sd = u.statement_date.includes('-')
+          ? new Date(u.statement_date + 'T00:00:00')
+          : (() => { const [dd,mm,yyyy] = u.statement_date.split('/'); return new Date(`${yyyy}-${mm}-${dd}T00:00:00`); })();
+        if (!isNaN(sd)) {
+          const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][sd.getMonth()];
+          dateLabel = `${String(sd.getDate()).padStart(2,'0')}-${mon}-${String(sd.getFullYear()).slice(2)}`;
+        }
+      }
+      return { uploadId: u.upload_id, label: `CC ${bank} · ${dateLabel}` };
+    });
+
+  const uploadSel = document.getElementById('tx-upload');
+  if (uploadSel) {
+    const curUpload = uploadSel.value;
+    uploadSel.innerHTML = '<option value="">All Statements</option>' +
+      allUploads.map(u => `<option value="${u.uploadId}" ${u.uploadId==curUpload?'selected':''}>${u.label}</option>`).join('');
+  }
+
+  // Populate action bar category select
+  const abarCat = document.getElementById('abar-cat');
+  if (abarCat) {
+    abarCat.innerHTML = '<option value="">Reassign category…</option>' +
+      CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
 
   await loadTransactions();
 }
 
 async function loadTransactions() {
   const params = new URLSearchParams();
-  const q    = document.getElementById('tx-search').value;
-  const own  = document.getElementById('tx-owner').value;
-  const mon  = document.getElementById('tx-month').value;
-  const acc  = document.getElementById('tx-account').value;
-  const cat  = document.getElementById('tx-category').value;
-  const real = document.getElementById('tx-real').value;
-  if (q)    params.set('q', q);
-  if (own)  params.set('owner', own);
-  if (mon)  params.set('month', mon);
-  if (acc)  params.set('account_id', acc);
-  if (cat)  params.set('category', cat);
-  if (real) params.set('is_real_expense', real);
+  const q       = document.getElementById('tx-search').value;
+  const own     = document.getElementById('tx-owner').value;
+  const mon     = document.getElementById('tx-month').value;
+  const cat     = document.getElementById('tx-category').value;
+  const real    = document.getElementById('tx-real').value;
+  const paidBy  = document.getElementById('tx-paid-by').value;
+  const idealPB = document.getElementById('tx-ideal-paid-by').value;
+  const settled = document.getElementById('tx-settled').value;
+  const upload  = document.getElementById('tx-upload').value;
+  if (q)       params.set('q', q);
+  if (own)     params.set('owner', own);
+  if (mon)     params.set('month', mon);
+  if (cat)     params.set('category', cat);
+  if (real)    params.set('is_real_expense', real);
+  if (paidBy)  params.set('paid_by', paidBy);
+  if (idealPB) params.set('ideal_paid_by', idealPB);
+  if (settled) params.set('settled', settled);
+  if (upload)  params.set('upload_id', upload);
 
   txRows = await api('/api/transactions?' + params);
   renderTxTable();
@@ -613,46 +730,20 @@ function renderTxTable() {
     return;
   }
 
-  // populate select-by-statement dropdown (one entry per upload, using statement_date for label)
-  const stmtSel = document.getElementById('stmt-select');
-  if (stmtSel) {
-    const prev = stmtSel.value;
-    const uploadMap = new Map();
-    txRows.forEach(t => { if (t.upload_id && !uploadMap.has(t.upload_id)) uploadMap.set(t.upload_id, t); });
-    const uploads = [...uploadMap.values()].sort((a, b) => (a.upload_statement_month||'') < (b.upload_statement_month||'') ? -1 : 1);
-    stmtSel.innerHTML = '<option value="">Select by statement…</option>' +
-      uploads.map(u => {
-        const bank = (u.bank || '').toUpperCase();
-        let dateLabel = fmtMonth(u.upload_statement_month);
-        if (u.statement_date) {
-          const sd = u.statement_date.includes('-')
-            ? new Date(u.statement_date + 'T00:00:00')
-            : (() => { const [dd,mm,yyyy] = u.statement_date.split('/'); return new Date(`${yyyy}-${mm}-${dd}T00:00:00`); })();
-          if (!isNaN(sd)) {
-            const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][sd.getMonth()];
-            dateLabel = `${String(sd.getDate()).padStart(2,'0')}-${mon}-${String(sd.getFullYear()).slice(2)}`;
-          }
-        }
-        return `<option value="${u.upload_id}">CC ${bank} · ${dateLabel}</option>`;
-      }).join('');
-    stmtSel.value = prev;
-  }
-
-  // update export button label
-  const exportBtn = document.getElementById('export-btn');
-  if (exportBtn) exportBtn.textContent = selectedTxIds.size > 0 ? `Export ${selectedTxIds.size} selected` : 'Export CSV';
-
   // update select-all checkbox state
   const chkAll = document.getElementById('chk-all');
   if (chkAll) chkAll.checked = sorted.length > 0 && sorted.every(t => selectedTxIds.has(t.id));
+  updateActionBar();
 
   tbody.innerHTML = sorted.map(t => {
     const catOpts = CATEGORIES.map(c => `<option value="${c}" ${c===t.category?'selected':''}>${c}</option>`).join('');
     const actualOpts = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===t.paid_by?'selected':''}>${o}</option>`).join('');
     const idealOpts  = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===(t.ideal_paid_by||'')?'selected':''}>${o}</option>`).join('');
     const amtCls = t.amount < 0 ? 'amount-neg' : '';
-    const checked = selectedTxIds.has(t.id) ? 'checked' : '';
-    return `<tr>
+    const isSelected = selectedTxIds.has(t.id);
+    const checked = isSelected ? 'checked' : '';
+    const selCls = isSelected ? 'tx-selected' : '';
+    return `<tr class="${selCls}">
       <td style="text-align:center"><input type="checkbox" class="tx-chk inline-check" data-id="${t.id}" ${checked} onchange="toggleTxSel(${t.id},this.checked)"></td>
       <td style="white-space:nowrap;color:#6e6e73">${fmtDate(t.date_parsed)}</td>
       <td>
@@ -742,10 +833,14 @@ async function deleteTx(id) {
 function toggleTxSel(id, checked) {
   if (checked) selectedTxIds.add(id);
   else selectedTxIds.delete(id);
-  const exportBtn = document.getElementById('export-btn');
-  if (exportBtn) exportBtn.textContent = selectedTxIds.size > 0 ? `Export ${selectedTxIds.size} selected` : 'Export CSV';
   const chkAll = document.getElementById('chk-all');
   if (chkAll) chkAll.checked = txRows.length > 0 && txRows.every(t => selectedTxIds.has(t.id));
+  // Update row highlight without full re-render
+  document.querySelectorAll(`.tx-chk[data-id="${id}"]`).forEach(chk => {
+    const row = chk.closest('tr');
+    if (row) row.classList.toggle('tx-selected', checked);
+  });
+  updateActionBar();
 }
 
 function toggleAllTx(checked) {
@@ -753,31 +848,149 @@ function toggleAllTx(checked) {
   renderTxTable();
 }
 
-function selectByStatement(uploadId) {
-  if (!uploadId) return;
-  const uid = parseInt(uploadId);
-  txRows.forEach(t => { if (t.upload_id === uid) selectedTxIds.add(t.id); });
-  renderTxTable();
-  document.getElementById('stmt-select').value = uploadId;
+function updateActionBar() {
+  const bar = document.getElementById('action-bar');
+  if (!bar) return;
+  const count = selectedTxIds.size;
+  if (count > 0) {
+    bar.classList.add('visible');
+    document.getElementById('abar-count').textContent = `${count} selected`;
+  } else {
+    bar.classList.remove('visible');
+  }
 }
 
-function exportCSV() {
-  if (selectedTxIds.size > 0) {
-    window.location.href = '/api/export?ids=' + [...selectedTxIds].join(',');
+function clearSelection() {
+  selectedTxIds.clear();
+  renderTxTable();
+}
+
+function clearFilters() {
+  ['tx-search','tx-month','tx-category','tx-real','tx-owner','tx-paid-by','tx-ideal-paid-by','tx-settled','tx-upload']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  loadTransactions();
+}
+
+async function bulkDelete() {
+  const count = selectedTxIds.size;
+  if (!count) return;
+  if (!confirm(`Permanently delete ${count} transaction${count > 1 ? 's' : ''}? This cannot be undone.`)) return;
+  const ids = [...selectedTxIds];
+  await Promise.all(ids.map(id => fetch(`/api/transactions/${id}`, { method: 'DELETE' })));
+  txRows = txRows.filter(r => !selectedTxIds.has(r.id));
+  allTxRows = allTxRows.filter(r => !selectedTxIds.has(r.id));
+  selectedTxIds.clear();
+  renderTxTable();
+}
+
+async function bulkReassignCategory(cat) {
+  if (!cat || !selectedTxIds.size) {
+    document.getElementById('abar-cat').value = '';
     return;
   }
-  const params = new URLSearchParams();
-  const q   = document.getElementById('tx-search').value;
-  const own = document.getElementById('tx-owner').value;
-  const mon = document.getElementById('tx-month').value;
-  const acc = document.getElementById('tx-account').value;
-  const cat = document.getElementById('tx-category').value;
-  if (q)   params.set('q', q);
-  if (own) params.set('owner', own);
-  if (mon) params.set('month', mon);
-  if (acc) params.set('account_id', acc);
-  if (cat) params.set('category', cat);
-  window.location.href = '/api/export?' + params;
+  const ids = [...selectedTxIds];
+  await Promise.all(ids.map(id =>
+    fetch(`/api/transactions/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: cat }) })
+  ));
+  txRows.forEach(r => { if (selectedTxIds.has(r.id)) r.category = cat; });
+  allTxRows.forEach(r => { if (selectedTxIds.has(r.id)) r.category = cat; });
+  document.getElementById('abar-cat').value = '';
+  renderTxTable();
+}
+
+// ── EXPORT MODAL ──
+function openExportModal() {
+  exportScope = null;
+  document.getElementById('export-modal').classList.add('visible');
+  renderExportStep1();
+}
+
+function closeExportModal() {
+  document.getElementById('export-modal').classList.remove('visible');
+  exportScope = null;
+}
+
+function renderExportStep1() {
+  const selCount = selectedTxIds.size;
+  document.getElementById('exp-modal-title').textContent = 'Export Transactions';
+  document.getElementById('exp-modal-body').innerHTML = `
+    <div class="modal-opt ${selCount === 0 ? 'disabled' : ''}" ${selCount > 0 ? 'onclick="exportScopeSelected()"' : ''}>
+      <div class="opt-title">Export selected (${selCount} item${selCount !== 1 ? 's' : ''})</div>
+      <div class="opt-sub">${selCount === 0 ? 'Select rows first using the checkboxes' : 'Export exactly the rows you\'ve checked'}</div>
+    </div>
+    <div class="modal-opt" onclick="document.getElementById('exp-stmt-sel').focus()">
+      <div class="opt-title">Export by card statement</div>
+      <div class="opt-sub" style="margin-bottom:10px">Choose a specific statement to export all its transactions</div>
+      <select class="filter-select" id="exp-stmt-sel" style="width:100%" onclick="event.stopPropagation()" onchange="exportScopeStatement(this.value)">
+        <option value="">— Select statement —</option>
+        ${allUploads.map(u => `<option value="${u.uploadId}">${u.label}</option>`).join('')}
+      </select>
+    </div>
+  `;
+  document.getElementById('exp-modal-footer').innerHTML = `
+    <button class="btn btn-outline" onclick="closeExportModal()">Cancel</button>
+  `;
+}
+
+function exportScopeSelected() {
+  exportScope = { type: 'selected' };
+  renderExportPreview();
+}
+
+function exportScopeStatement(uploadId) {
+  if (!uploadId) return;
+  exportScope = { type: 'statement', uploadId: parseInt(uploadId) };
+  renderExportPreview();
+}
+
+function renderExportPreview() {
+  let rows;
+  if (exportScope.type === 'selected') {
+    rows = allTxRows.filter(t => selectedTxIds.has(t.id));
+  } else {
+    rows = allTxRows.filter(t => t.upload_id === exportScope.uploadId);
+  }
+
+  const total = rows.reduce((s, t) => s + (t.amount || 0), 0);
+  const dates = rows.map(t => t.date_parsed).filter(Boolean).sort();
+  const dateRange = dates.length ? `${fmtDate(dates[0])} – ${fmtDate(dates[dates.length - 1])}` : '—';
+  const preview = rows.slice(0, 10);
+
+  document.getElementById('exp-modal-title').textContent = 'Preview';
+  document.getElementById('exp-modal-body').innerHTML = `
+    <div class="preview-meta">
+      <div class="pm-item"><div class="pm-label">Items</div><div class="pm-val">${rows.length}</div></div>
+      <div class="pm-item"><div class="pm-label">Date range</div><div class="pm-val" style="font-size:12px">${dateRange}</div></div>
+      <div class="pm-item"><div class="pm-label">Total</div><div class="pm-val">${fmtAmount(total)}</div></div>
+    </div>
+    <div style="border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;max-height:280px;overflow-y:auto">
+      <table class="preview-tbl">
+        <thead><tr><th>Date</th><th>Category</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+        <tbody>
+          ${preview.map(t => `<tr>
+            <td style="white-space:nowrap">${fmtDate(t.date_parsed)}</td>
+            <td><span class="cat-badge ${CAT_CLASS[t.category]||'cat-OTHERS'}" style="font-size:10px;padding:2px 7px">${t.category||'—'}</span></td>
+            <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.description||'—')}</td>
+            <td style="text-align:right;font-weight:600;white-space:nowrap">${fmtAmount(t.amount)}</td>
+          </tr>`).join('')}
+          ${rows.length > 10 ? `<tr><td colspan="4" style="text-align:center;color:#8e8e93;font-size:12px;padding:10px">…and ${rows.length - 10} more</td></tr>` : ''}
+        </tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById('exp-modal-footer').innerHTML = `
+    <button class="btn btn-outline" onclick="renderExportStep1()">← Back</button>
+    <button class="btn" onclick="doExportDownload()">Download CSV</button>
+  `;
+}
+
+function doExportDownload() {
+  if (exportScope.type === 'selected') {
+    window.location.href = '/api/export?ids=' + [...selectedTxIds].join(',');
+  } else {
+    window.location.href = '/api/export?upload_id=' + exportScope.uploadId;
+  }
+  closeExportModal();
 }
 
 // ── SETTLEMENTS ──
