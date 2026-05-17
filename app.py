@@ -262,6 +262,7 @@ def api_export():
             search=request.args.get('q'),
             upload_id=request.args.get('upload_id'),
         )
+    rows.sort(key=lambda r: (r.get('date_parsed') or '', r.get('id') or 0))
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(['Date', 'Category', 'Expense Items Detail', 'Amount (Rp)',
