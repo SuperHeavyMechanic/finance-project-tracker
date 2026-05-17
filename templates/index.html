@@ -18,7 +18,7 @@
     nav a.active { color: #fff; border-bottom-color: #0071e3; }
 
     /* ── LAYOUT ── */
-    main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+    main { max-width: 1600px; margin: 0 auto; padding: 32px 24px; }
     .view { display: none; }
     .view.active { display: block; }
 
@@ -159,6 +159,34 @@
       td:nth-child(1) { display: none; }
     }
 
+    /* ── FROZEN TABLE ── */
+    .tx-scroll { overflow: auto; max-height: calc(100vh - 260px); }
+
+    /* Solid backgrounds so frozen cells cover scrolled content */
+    #view-transactions td { background: #fff; }
+    #view-transactions tr:hover td { background: #fafafa; }
+
+    /* Frozen header row */
+    #view-transactions thead th { position: sticky; top: 0; z-index: 10; background: #f9f9fb; }
+
+    /* Frozen columns 1-5 (checkbox → Amount) — body cells */
+    #view-transactions tbody td:nth-child(1) { position: sticky; left: 0;     z-index: 5; }
+    #view-transactions tbody td:nth-child(2) { position: sticky; left: 40px;  z-index: 5; }
+    #view-transactions tbody td:nth-child(3) { position: sticky; left: 136px; z-index: 5; }
+    #view-transactions tbody td:nth-child(4) { position: sticky; left: 276px; z-index: 5; }
+    #view-transactions tbody td:nth-child(5) { position: sticky; left: 496px; z-index: 5; }
+
+    /* Frozen corner cells (header × column) — highest z-index */
+    #view-transactions thead th:nth-child(1) { left: 0; }
+    #view-transactions thead th:nth-child(2) { left: 40px; }
+    #view-transactions thead th:nth-child(3) { left: 136px; }
+    #view-transactions thead th:nth-child(4) { left: 276px; }
+    #view-transactions thead th:nth-child(5) { left: 496px; z-index: 15; }
+
+    /* Divider after the frozen zone */
+    #view-transactions th:nth-child(5),
+    #view-transactions td:nth-child(5) { border-right: 2px solid #d0d0d8; }
+
     /* ── SELECTED ROW ── */
     tr.tx-selected td { background: #eff6ff !important; }
     tr.tx-selected td:first-child { border-left: 3px solid #0071e3; padding-left: 11px; }
@@ -283,15 +311,15 @@
           </select>
         </div>
       </div>
-      <div style="overflow-x:auto;">
-        <table>
+      <div class="tx-scroll">
+        <table style="width:100%;min-width:1100px">
           <thead>
             <tr>
-              <th style="text-align:center;width:36px"><input type="checkbox" id="chk-all" onchange="toggleAllTx(this.checked)"></th>
-              <th onclick="txSort('date_parsed')">Date</th>
-              <th onclick="txSort('category')">Category</th>
-              <th onclick="txSort('description')">Expense Items Detail</th>
-              <th onclick="txSort('amount')" style="text-align:right">Amount (Rp)</th>
+              <th style="text-align:center;width:40px;min-width:40px"><input type="checkbox" id="chk-all" onchange="toggleAllTx(this.checked)"></th>
+              <th style="min-width:96px" onclick="txSort('date_parsed')">Date</th>
+              <th style="min-width:140px" onclick="txSort('category')">Category</th>
+              <th style="min-width:220px" onclick="txSort('description')">Expense Items Detail</th>
+              <th style="min-width:120px;text-align:right" onclick="txSort('amount')">Amount (Rp)</th>
               <th style="text-align:center">Real?</th>
               <th>Paid By</th>
               <th>Actual Source</th>
