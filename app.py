@@ -86,7 +86,7 @@ def build_debit_extraction_prompt(rules_section=''):
 Return a JSON object with exactly two top-level fields:
 - period: the statement period as printed (e.g. "APRIL 2026")
 - transactions: an array of objects with these exact fields:
-  - date: transaction date string (keep original format, e.g. "01/04")
+  - date: transaction date as DD/MM/YYYY — use the year from the period (e.g. "01/04/2026" for APRIL 2026)
   - description: clean, readable merchant/payee name. For QR transactions: use the merchant name (text after "00000.00"). For e-banking transfers: combine counterparty name and the free-text note into one readable line.
   - amount: positive numeric IDR amount. No symbols or commas.
   - transaction_type: "DB" for debit/outgoing, "CR" for credit/incoming
@@ -103,8 +103,8 @@ Example:
 {{
   "period": "APRIL 2026",
   "transactions": [
-    {{"date": "01/04", "description": "Arya valet", "amount": 30000, "transaction_type": "DB", "category": "TRANSPORTATION", "is_real_expense": true}},
-    {{"date": "03/04", "description": "Transfer from FAHMIANDINI KHOIRU – Keg Azana 1 s.d 3 April", "amount": 560000, "transaction_type": "CR", "category": "OTHERS", "is_real_expense": false}}
+    {{"date": "01/04/2026", "description": "Arya valet", "amount": 30000, "transaction_type": "DB", "category": "TRANSPORTATION", "is_real_expense": true}},
+    {{"date": "03/04/2026", "description": "Transfer from FAHMIANDINI KHOIRU – Keg Azana 1 s.d 3 April", "amount": 560000, "transaction_type": "CR", "category": "OTHERS", "is_real_expense": false}}
   ]
 }}"""
 
