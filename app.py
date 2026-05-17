@@ -142,9 +142,9 @@ def api_upload():
         try:
             reader = pypdf.PdfReader(io.BytesIO(file_bytes))
             if reader.is_encrypted:
-                if not password:
-                    return jsonify({'error': 'This PDF is password-protected. Please enter the password.'}), 400
-                if reader.decrypt(password) == pypdf.PasswordType.NOT_DECRYPTED:
+                if reader.decrypt(password or '') == pypdf.PasswordType.NOT_DECRYPTED:
+                    if not password:
+                        return jsonify({'error': 'This PDF is password-protected. Please enter the password.'}), 400
                     return jsonify({'error': 'Incorrect PDF password.'}), 400
                 writer = pypdf.PdfWriter()
                 for page in reader.pages:
