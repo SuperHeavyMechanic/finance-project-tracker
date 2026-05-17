@@ -268,11 +268,7 @@ def api_export():
                 'Real expenses?', 'Paid By', 'Actual Source', 'Ideal Source',
                 'Settled?', 'Card / Statement'])
     for r in rows:
-        amt = r['amount']
-        if r.get('original_currency') and r.get('original_currency') != 'IDR':
-            amt_str = f"{amt} ({r['original_currency']} {r['original_amount']})"
-        else:
-            amt_str = amt
+        amt_str = int(round(r['amount'])) if r['amount'] is not None else ''
         stmt = f"CC {(r['bank'] or '').upper()} · {_csv_month(r['upload_statement_month'])}"
         w.writerow([
             _csv_date(r['date_parsed']),
