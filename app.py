@@ -14,7 +14,7 @@ from db import (init_db, get_accounts, save_upload, save_staged, check_duplicate
                 get_staged, update_staged, delete_staged_tx, confirm_upload, discard_upload,
                 get_dashboard_data, get_settlements, get_statements,
                 parse_date, _dominant_month)
-from rules import apply_rules, build_rules_prompt
+from rules import apply_rules, build_rules_prompt, build_bank_notes
 
 load_dotenv()
 
@@ -49,9 +49,10 @@ def period_to_statement_date(period_str):
             return f"{last_day:02d}/{m:02d}/{y}"
     return None
 
-def build_extraction_prompt(rules_section=''):
+def build_extraction_prompt(rules_section='', bank_notes=''):
+    notes_block = f'\n\n{bank_notes}' if bank_notes else ''
     rules_block = f'\n\n{rules_section}' if rules_section else ''
-    return f"""You are a financial data extraction assistant. Analyze this credit card statement and extract every transaction line item.{rules_block}
+    return f"""You are a financial data extraction assistant. Analyze this credit card statement and extract every transaction line item.{notes_block}{rules_block}
 
 Return a JSON object with exactly two top-level fields:
 - statement_date: the billing cycle end date or statement date as printed on the statement (keep original format), or null if not found
@@ -79,15 +80,16 @@ Example:
   ]
 }}"""
 
-def build_debit_extraction_prompt(rules_section=''):
+def build_debit_extraction_prompt(rules_section='', bank_notes=''):
+    notes_block = f'\n\n{bank_notes}' if bank_notes else ''
     rules_block = f'\n\n{rules_section}' if rules_section else ''
-    return f"""You are a financial data extraction assistant. Analyze this BCA Rekening Tahapan (debit/bank) statement and extract every transaction.{rules_block}
+    return f"""You are a financial data extraction assistant. Analyze this debit/bank statement and extract every transaction.{notes_block}{rules_block}
 
 Return a JSON object with exactly two top-level fields:
 - period: the statement period as printed (e.g. "APRIL 2026")
 - transactions: an array of objects with these exact fields:
   - date: transaction date as DD/MM/YYYY — use the year from the period (e.g. "01/04/2026" for APRIL 2026)
-  - description: clean, readable merchant/payee name. For QR transactions: use the merchant name (text after "00000.00"). For e-banking transfers: combine counterparty name and the free-text note into one readable line.
+  - description: clean, readable merchant/payee name
   - amount: positive numeric IDR amount. No symbols or commas.
   - transaction_type: "DB" for debit/outgoing, "CR" for credit/incoming
   - category: one of exactly {json.dumps(CATEGORIES)}
@@ -95,8 +97,6 @@ Return a JSON object with exactly two top-level fields:
 
 Rules:
 - Extract ALL rows including incoming (CR) transfers — they are shown in review for context only
-- Ignore Poket Valas pages (any section where MATA UANG ≠ IDR)
-- BIAYA ADM rows: extract as DB, category OTHERS, is_real_expense true
 - Return ONLY the raw JSON object, no markdown fences, no explanation
 
 Example:
@@ -172,10 +172,11 @@ def api_upload():
     account_name = account.get('name', '')
     account_type = account.get('account_type', 'credit')
 
+    bank_notes = build_bank_notes(account_name)
     if account_type == 'debit':
-        prompt_text = build_debit_extraction_prompt(build_rules_prompt(account_name))
+        prompt_text = build_debit_extraction_prompt(build_rules_prompt(account_name), bank_notes)
     else:
-        prompt_text = build_extraction_prompt(build_rules_prompt(account_name))
+        prompt_text = build_extraction_prompt(build_rules_prompt(account_name), bank_notes)
 
     try:
         response = client.messages.create(
