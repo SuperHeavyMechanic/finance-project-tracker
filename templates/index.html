@@ -640,22 +640,26 @@ function fmtMonth(ym) {
   return `${mon}-${y.slice(2)}`;
 }
 
-function stmtRef(bank, statementDate, statementMonth) {
-  const b = (bank || '').toUpperCase();
-  let dateLabel = '';
+function parseStatementDateLabel(statementDate, statementMonth) {
   if (statementDate) {
     const d = statementDate.includes('-')
       ? new Date(statementDate + 'T00:00:00')
       : (() => { const [dd,mm,yyyy] = statementDate.split('/'); return new Date(`${yyyy}-${mm}-${dd}T00:00:00`); })();
     if (!isNaN(d)) {
       const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
-      dateLabel = `${mon}-${String(d.getFullYear()).slice(2)}`;
-    } else dateLabel = statementDate;
-  } else if (statementMonth) {
-    dateLabel = fmtMonth(statementMonth);
+      return `${mon}-${String(d.getFullYear()).slice(2)}`;
+    }
+    return statementDate;
   }
-  if (!b && !dateLabel) return '—';
-  return `<span class="stmt-ref">CC ${b}${dateLabel ? ' · ' + dateLabel : ''}</span>`;
+  if (statementMonth) return fmtMonth(statementMonth);
+  return '—';
+}
+
+function stmtRef(bank, statementDate, statementMonth) {
+  const b = (bank || '').toUpperCase();
+  const dateLabel = parseStatementDateLabel(statementDate, statementMonth);
+  if (!b && dateLabel === '—') return '—';
+  return `<span class="stmt-ref">CC ${b}${dateLabel !== '—' ? ' · ' + dateLabel : ''}</span>`;
 }
 
 function catBadge(cat) {
@@ -913,7 +917,7 @@ function renderTxTable() {
                onchange="patchTx(${t.id},{settled:this.checked?1:0,settled_date:this.checked?new Date().toISOString().slice(0,10):null})">
       </td>
       <td style="font-size:12px;color:#1d1d1f;white-space:nowrap">${esc(t.account_name||'—')}</td>
-      <td style="font-size:12px;color:#6e6e73;white-space:nowrap">${t.statement_date ? fmtDate(t.statement_date) : (t.upload_statement_month ? fmtMonth(t.upload_statement_month) : '—')}</td>
+      <td style="font-size:12px;color:#6e6e73;white-space:nowrap">${parseStatementDateLabel(t.statement_date, t.upload_statement_month)}</td>
       <td style="text-align:center">
         <button class="btn-del" onclick="deleteTx(${t.id})" title="Delete transaction">✕</button>
       </td>
