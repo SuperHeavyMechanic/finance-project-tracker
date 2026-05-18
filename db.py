@@ -10,6 +10,7 @@ SEED_ACCOUNTS = [
     {'owner': 'SHAN',  'name': 'CC MANDIRI VISA SIGNATURE',  'bank': 'Mandiri',        'last_four': '5856', 'account_type': 'credit'},
     {'owner': 'JOINT', 'name': 'CC JENIUS',                  'bank': 'Jenius (BTPN)',  'last_four': '9XXX', 'account_type': 'credit'},
     {'owner': 'SHAN',  'name': 'BCA Rekening Tahapan',       'bank': 'BCA',            'last_four': '4980', 'account_type': 'debit'},
+    {'owner': 'JOINT', 'name': 'Cash',                       'bank': 'CASH',           'last_four': '',     'account_type': 'cash'},
 ]
 
 _MONTH_MAP = {
