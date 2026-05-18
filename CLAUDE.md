@@ -27,12 +27,15 @@ ANTHROPIC_API_KEY=sk-ant-...
 Four Python files + one HTML file. No build step.
 
 **`db.py`** — all database logic (SQLite via `sqlite3`). Key functions:
-- `init_db()` — creates tables, runs `ALTER TABLE` migrations, seeds missing accounts from `SEED_ACCOUNTS` (per-account upsert by bank + last_four, not "seed if empty")
+- `init_db()` — creates tables, runs `ALTER TABLE` migrations, seeds missing accounts from `SEED_ACCOUNTS` (per-account upsert by `bank + last_four`). Also runs a one-time migration to fix Cash account `last_four` keys.
 - `save_staged(account_id, filename, transactions, statement_date)` — creates the upload record and writes transactions to `staged_transactions`; this is the main upload path
 - `confirm_upload(upload_id)` — inserts only `transaction_type='DB'` staged rows into `transactions`, then deletes all staged rows for that upload
 - `discard_upload(upload_id)` — deletes all staged rows + the upload record entirely
 - `get_staged(upload_id)` — returns staged rows joined with account info (includes `account_type`)
 - `parse_date(s)` — normalises Indonesian bank date formats (DD/MM/YYYY, DD-Mon-YY, ISO) to YYYY-MM-DD
+- `create_transaction(fields)` — direct insert into `transactions` (manual entry, no upload/staging)
+- `create_account / update_account / delete_account` — full account CRUD
+- `update_transaction(tx_id, fields)` — allowed fields: `category`, `is_real_expense`, `paid_by`, `ideal_paid_by`, `settled`, `settled_date`, `amount`, `date_parsed`, `description`
 - `save_upload()` — legacy function still in code but not called by any route; staging path replaced it
 
 **`rules.py`** — three layers of extraction customisation:
@@ -45,20 +48,20 @@ Four Python files + one HTML file. No build step.
 - `build_extraction_prompt(rules_section, bank_notes)` — credit card prompt
 - `build_debit_extraction_prompt(rules_section, bank_notes)` — debit/bank prompt; generic structure, bank-specific quirks come from `bank_notes`
 - `period_to_statement_date(period_str)` — converts "APRIL 2026" → "30/04/2026" (last calendar day of period)
-- Upload route branches on `account.account_type`: debit uses debit prompt + extracts `period` field; credit uses credit prompt + extracts `statement_date`
+- Upload route branches on `account.account_type`: `debit` uses debit prompt + extracts `period` field; `credit` uses credit prompt + extracts `statement_date`; `cash` accounts are not intended for PDF upload (manual entry only)
 - PDF decryption: tries empty-string password first before prompting user (handles BCA-style "encrypted with no password" PDFs)
 - Duplicate detection runs before staging; returns `{duplicate:true}` with in-memory transactions so frontend can confirm
 
-**`templates/index.html`** — single-file SPA (~1350 lines). Vanilla JS + Chart.js (CDN). Six views via `navigate(view)`. Key frontend state: `allAccounts`, `txRows`, `selectedTxIds` (Set), `pendingUploadId`, `pendingDuplicate`.
+**`templates/index.html`** — single-file SPA (~1870 lines). Vanilla JS + Chart.js (CDN). Six views via `navigate(view)`. Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `pendingUploadId`, `pendingDuplicate`.
 
 ## Data Model
 
 Four tables in `data/finance.db` (gitignored):
 
-- **`accounts`** — seeded from `SEED_ACCOUNTS`; `owner` ∈ {SHAN, JANICE, JOINT}; `account_type` ∈ {credit, debit} drives prompt branching and review UI layout
-- **`uploads`** — one row per statement; `statement_month` (YYYY-MM) derived from `statement_date` (billing date in original format); survives confirm, deleted on discard
+- **`accounts`** — seeded from `SEED_ACCOUNTS` (6 accounts: 3 credit, 1 debit, 2 cash); also manageable via UI CRUD. `owner` ∈ {SHAN, JANICE, JOINT}; `account_type` ∈ {credit, debit, cash}
+- **`uploads`** — one row per statement; `statement_month` (YYYY-MM) derived from `statement_date` (billing date in **original PDF format**, not ISO); survives confirm, deleted on discard
 - **`staged_transactions`** — pure buffer; holds extracted rows pending review; cleared entirely on every confirm or discard; `transaction_type` ∈ {DB, CR} (CR rows shown for context in debit review but never confirmed)
-- **`transactions`** — confirmed rows only; never contains staged or CR data; all downstream views read only this table
+- **`transactions`** — confirmed rows only; never contains staged or CR data; all downstream views read only this table. `upload_id` is NULL for manually-added transactions.
 
 ## Upload & Staging Flow
 
@@ -77,6 +80,9 @@ Frontend opens review modal (immediate after upload, or via Statements "Review �
 
 POST /api/upload/confirm  (duplicate override path)
   → same as above but skips duplicate check; calls save_staged() directly
+
+POST /api/transactions  (manual entry path)
+  → direct insert into transactions; no upload record, no staging
 ```
 
 ## Prompt Architecture (three layers, all in `rules.py` + `app.py`)
@@ -92,9 +98,12 @@ To handle a new bank's quirks: add an entry to `BANK_NOTES` in `rules.py`. Only 
 ## Date & Statement Naming Convention
 
 All dates displayed as **DD-Mmm-YY** (e.g. `20-Apr-26`).
-- `fmtDate(date_parsed)` — formats YYYY-MM-DD
-- `fmtMonth(ym)` — formats YYYY-MM
-- `stmtRef(bank, statement_date, statement_month)` — renders statement badge; prefers `statement_date` over `statement_month`
+- `fmtDate(date_parsed)` — formats YYYY-MM-DD → DD-Mmm-YY
+- `fmtDateObj(d)` — formats a JS Date object → DD-Mmm-YY (shared helper)
+- `parseStatementDateLabel(statementDate, statementMonth)` — handles raw PDF date formats (DD/MM/YYYY or ISO) and YYYY-MM month strings; falls back to last day of month when only month is available
+- `stmtRef(bank, statement_date, statement_month)` — renders statement badge using `parseStatementDateLabel`
+
+`statement_date` in the DB is stored in the **original PDF format** (e.g. `"11/04/2026"`), not ISO. Always use `parseStatementDateLabel` to display it, never `fmtDate` directly.
 
 Statement month is always derived from the **billing date** on the PDF (credit) or the **last day of the printed period** (debit), never from the dominant transaction date.
 
@@ -103,6 +112,9 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/accounts` | All accounts with tx_count, last_upload, account_type |
+| POST | `/api/accounts` | Create account |
+| PATCH | `/api/accounts/<id>` | Update account (name, owner, bank, last_four, account_type) |
+| DELETE | `/api/accounts/<id>` | Delete account (transactions preserved, lose account link) |
 | POST | `/api/upload` | Extract → stage; returns `{duplicate:true}` or `{staged:true, upload_id}` |
 | POST | `/api/upload/confirm` | Force-stage a duplicate (skips duplicate check) |
 | GET | `/api/uploads/<id>/staged` | Staged rows for review (includes account_type for layout) |
@@ -111,7 +123,8 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 | POST | `/api/uploads/<id>/confirm` | Confirm: DB staged rows → transactions, clear staged |
 | DELETE | `/api/uploads/<id>` | Discard: delete staged rows + upload record |
 | GET | `/api/transactions` | Filterable list (owner, month, account_id, category, is_real_expense, settled, paid_by, ideal_paid_by, upload_id, q) |
-| PATCH | `/api/transactions/<id>` | Update category, is_real_expense, paid_by, ideal_paid_by, settled, settled_date, amount |
+| POST | `/api/transactions` | Manual entry: direct insert, no upload_id |
+| PATCH | `/api/transactions/<id>` | Update any allowed field (see `update_transaction` above) |
 | DELETE | `/api/transactions/<id>` | Delete a confirmed transaction |
 | GET | `/api/dashboard` | Trend + summary scoped to months with actual data |
 | GET | `/api/settlements` | Transactions where paid_by ≠ account owner |
@@ -124,9 +137,10 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 - Accepted file types: `.pdf`, `.jpg`, `.jpeg`, `.png`
 - Claude model pinned to `claude-sonnet-4-6` in `app.py`
 - 14 categories (all-caps) defined in both `app.py` (`CATEGORIES`) and `templates/index.html` (`CATEGORIES` + `CAT_CLASS` + `CAT_COLORS`) — must stay in sync
-- Owners hardcoded: SHAN, JANICE, JOINT — not user-configurable via UI
-- Accounts are backend-seeded in `db.py:SEED_ACCOUNTS` (4 accounts: 3 credit, 1 BCA debit) — no add/edit UI
+- Owners: SHAN, JANICE, JOINT — hardcoded in UI dropdowns (filter bars, modals, action bar); not derived from DB
+- Actual Source (`paid_by`) values: SHAN, JANICE, JOINT — CASH is an account type, not a paid_by value
 - CSV `Amount` column: IDR integer only (`int(round(amount))`), no foreign currency, no decimals; rows sorted ascending by date
+- `allAccounts` is refreshed from the API every time `loadAccounts()` runs — the Add Transaction modal always reflects the current account list
 
 ## Git & GitHub Workflow
 
