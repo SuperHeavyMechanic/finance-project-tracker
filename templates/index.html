@@ -640,18 +640,24 @@ function fmtMonth(ym) {
   return `${mon}-${y.slice(2)}`;
 }
 
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDateObj(d) {
+  return `${String(d.getDate()).padStart(2,'0')}-${MONTHS_SHORT[d.getMonth()]}-${String(d.getFullYear()).slice(2)}`;
+}
+
 function parseStatementDateLabel(statementDate, statementMonth) {
   if (statementDate) {
     const d = statementDate.includes('-')
       ? new Date(statementDate + 'T00:00:00')
       : (() => { const [dd,mm,yyyy] = statementDate.split('/'); return new Date(`${yyyy}-${mm}-${dd}T00:00:00`); })();
-    if (!isNaN(d)) {
-      const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
-      return `${mon}-${String(d.getFullYear()).slice(2)}`;
-    }
+    if (!isNaN(d)) return fmtDateObj(d);
     return statementDate;
   }
-  if (statementMonth) return fmtMonth(statementMonth);
+  if (statementMonth) {
+    const [y, m] = statementMonth.split('-').map(Number);
+    const lastDay = new Date(y, m, 0);
+    return fmtDateObj(lastDay);
+  }
   return '—';
 }
 
@@ -659,7 +665,7 @@ function stmtRef(bank, statementDate, statementMonth) {
   const b = (bank || '').toUpperCase();
   const dateLabel = parseStatementDateLabel(statementDate, statementMonth);
   if (!b && dateLabel === '—') return '—';
-  return `<span class="stmt-ref">CC ${b}${dateLabel !== '—' ? ' · ' + dateLabel : ''}</span>`;
+  return `<span class="stmt-ref">${b}${dateLabel !== '—' ? ' · ' + dateLabel : ''}</span>`;
 }
 
 function catBadge(cat) {
