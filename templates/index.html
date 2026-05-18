@@ -88,6 +88,7 @@
     .owner-SHAN   { background: #dbeafe; color: #1e40af; }
     .owner-JANICE { background: #fce7f3; color: #9d174d; }
     .owner-JOINT  { background: #dcfce7; color: #166534; }
+    .owner-CASH   { background: #fef9c3; color: #854d0e; }
 
     /* ── INLINE EDIT ── */
     .inline-select { border: none; background: transparent; font: inherit; cursor: pointer; padding: 0; outline: none; border-radius: 8px; }
@@ -321,7 +322,7 @@
           </select>
           <select class="filter-select" id="tx-paid-by" onchange="loadTransactions()">
             <option value="">Actual Source</option>
-            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
+            <option>SHAN</option><option>JANICE</option><option>JOINT</option><option>CASH</option>
           </select>
           <select class="filter-select" id="tx-ideal-paid-by" onchange="loadTransactions()">
             <option value="">Ideal Source</option>
@@ -507,7 +508,7 @@
         <div class="step-row">
           <div class="step-label">Actual Source</div>
           <select id="atx-paid-by" class="step-select" style="padding:8px 12px">
-            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
+            <option>SHAN</option><option>JANICE</option><option>JOINT</option><option>CASH</option>
           </select>
         </div>
         <div class="step-row">
@@ -869,7 +870,7 @@ function renderTxTable() {
 
   tbody.innerHTML = sorted.map(t => {
     const catOpts = CATEGORIES.map(c => `<option value="${c}" ${c===t.category?'selected':''}>${c}</option>`).join('');
-    const actualOpts = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===t.paid_by?'selected':''}>${o}</option>`).join('');
+    const actualOpts = ['SHAN','JANICE','JOINT','CASH'].map(o => `<option value="${o}" ${o===t.paid_by?'selected':''}>${o}</option>`).join('');
     const idealOpts  = ['SHAN','JANICE','JOINT'].map(o => `<option value="${o}" ${o===(t.ideal_paid_by||'')?'selected':''}>${o}</option>`).join('');
     const amtCls = t.amount < 0 ? 'amount-neg' : '';
     const isSelected = selectedTxIds.has(t.id);
