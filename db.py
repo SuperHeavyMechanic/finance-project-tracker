@@ -253,6 +253,33 @@ def update_transaction(tx_id, fields):
     conn.commit()
     conn.close()
 
+def create_transaction(fields):
+    conn = get_db()
+    date_val = fields.get('date_parsed', '')
+    conn.execute('''
+        INSERT INTO transactions
+          (account_id, date, date_parsed, description, amount, currency,
+           category, is_real_expense, paid_by, ideal_paid_by, settled, settled_date)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    ''', (
+        fields['account_id'],
+        date_val,
+        date_val,
+        fields.get('description', ''),
+        fields.get('amount', 0),
+        'IDR',
+        fields.get('category', 'OTHERS'),
+        1 if fields.get('is_real_expense', True) else 0,
+        fields.get('paid_by', ''),
+        fields.get('ideal_paid_by') or None,
+        1 if fields.get('settled', False) else 0,
+        fields.get('settled_date') or None,
+    ))
+    conn.commit()
+    tx_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+    conn.close()
+    return tx_id
+
 def get_transactions_by_ids(ids):
     if not ids:
         return []

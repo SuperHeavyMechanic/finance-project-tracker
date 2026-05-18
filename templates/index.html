@@ -290,7 +290,10 @@
   <div id="view-transactions" class="view">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
       <div class="page-title" style="margin:0">Transactions</div>
-      <button class="btn btn-outline btn-sm" onclick="openExportModal()">Export CSV</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="openAddTxModal()">+ Add</button>
+        <button class="btn btn-outline btn-sm" onclick="openExportModal()">Export CSV</button>
+      </div>
     </div>
     <div class="table-wrap">
       <div class="filter-section">
@@ -471,6 +474,67 @@
   <button class="abar-btn danger" onclick="bulkDelete()">Delete</button>
   <div class="abar-sep"></div>
   <button class="abar-btn" onclick="clearSelection()">✕ Clear</button>
+</div>
+
+<!-- ── ADD TRANSACTION MODAL ── -->
+<div class="modal-overlay" id="add-tx-modal" onclick="if(event.target===this)closeAddTxModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">Add Transaction</div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="step-row">
+          <div class="step-label">Date *</div>
+          <input type="date" id="atx-date" class="step-select" style="padding:8px 12px">
+        </div>
+        <div class="step-row">
+          <div class="step-label">Account *</div>
+          <select id="atx-account" class="step-select" style="padding:8px 12px" onchange="onAddTxAccountChange()">
+            <option value="">— Select —</option>
+          </select>
+        </div>
+        <div class="step-row" style="grid-column:1/-1">
+          <div class="step-label">Description</div>
+          <input type="text" id="atx-desc" class="step-select" placeholder="e.g. Grab Food order" style="padding:8px 12px">
+        </div>
+        <div class="step-row">
+          <div class="step-label">Amount (Rp) *</div>
+          <input type="number" id="atx-amount" class="step-select" placeholder="0" min="0" step="1" style="padding:8px 12px">
+        </div>
+        <div class="step-row">
+          <div class="step-label">Category *</div>
+          <select id="atx-category" class="step-select" style="padding:8px 12px"></select>
+        </div>
+        <div class="step-row">
+          <div class="step-label">Actual Source</div>
+          <select id="atx-paid-by" class="step-select" style="padding:8px 12px">
+            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
+          </select>
+        </div>
+        <div class="step-row">
+          <div class="step-label">Ideal Source</div>
+          <select id="atx-ideal-paid-by" class="step-select" style="padding:8px 12px">
+            <option value="">—</option>
+            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
+          </select>
+        </div>
+        <div class="step-row" style="justify-content:center;padding-top:8px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="atx-real" class="inline-check" checked> Real expense?
+          </label>
+        </div>
+        <div class="step-row" style="justify-content:center;padding-top:8px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="atx-settled" class="inline-check"> Settled?
+          </label>
+        </div>
+      </div>
+      <div id="atx-error" style="display:none;margin-top:12px;color:#c0392b;font-size:13px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeAddTxModal()">Cancel</button>
+      <button class="btn btn-sm" onclick="submitAddTx()">Save Transaction</button>
+    </div>
+  </div>
 </div>
 
 <!-- ── EXPORT MODAL ── -->
@@ -1561,6 +1625,73 @@ async function discardReview(uploadId) {
 
 function closeReviewModal() {
   document.getElementById('review-modal').classList.remove('visible');
+}
+
+// ── ADD TRANSACTION ──
+function openAddTxModal() {
+  const catSel = document.getElementById('atx-category');
+  if (!catSel.options.length) {
+    CATEGORIES.forEach(c => catSel.appendChild(Object.assign(document.createElement('option'), {value: c, textContent: c})));
+  }
+  const accSel = document.getElementById('atx-account');
+  accSel.innerHTML = '<option value="">— Select —</option>' +
+    allAccounts.map(a => `<option value="${a.id}" data-owner="${a.owner}">${a.owner} · ${a.name}</option>`).join('');
+
+  document.getElementById('atx-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('atx-desc').value = '';
+  document.getElementById('atx-amount').value = '';
+  document.getElementById('atx-real').checked = true;
+  document.getElementById('atx-settled').checked = false;
+  document.getElementById('atx-ideal-paid-by').value = '';
+  document.getElementById('atx-error').style.display = 'none';
+  document.getElementById('add-tx-modal').classList.add('visible');
+  setTimeout(() => document.getElementById('atx-date').focus(), 50);
+}
+
+function closeAddTxModal() {
+  document.getElementById('add-tx-modal').classList.remove('visible');
+}
+
+function onAddTxAccountChange() {
+  const sel = document.getElementById('atx-account');
+  const opt = sel.selectedOptions[0];
+  const owner = opt ? opt.dataset.owner : '';
+  if (owner) document.getElementById('atx-paid-by').value = owner;
+}
+
+async function submitAddTx() {
+  const errEl = document.getElementById('atx-error');
+  errEl.style.display = 'none';
+
+  const account_id = +document.getElementById('atx-account').value;
+  const date_parsed = document.getElementById('atx-date').value;
+  const amount = parseFloat(document.getElementById('atx-amount').value);
+
+  if (!account_id) { errEl.textContent = 'Please select an account.'; errEl.style.display = 'block'; return; }
+  if (!date_parsed) { errEl.textContent = 'Please enter a date.'; errEl.style.display = 'block'; return; }
+  if (isNaN(amount)) { errEl.textContent = 'Please enter a valid amount.'; errEl.style.display = 'block'; return; }
+
+  const body = {
+    account_id,
+    date_parsed,
+    description: document.getElementById('atx-desc').value.trim(),
+    amount,
+    category: document.getElementById('atx-category').value,
+    is_real_expense: document.getElementById('atx-real').checked ? 1 : 0,
+    paid_by: document.getElementById('atx-paid-by').value,
+    ideal_paid_by: document.getElementById('atx-ideal-paid-by').value || null,
+    settled: document.getElementById('atx-settled').checked ? 1 : 0,
+  };
+
+  const res = await fetch('/api/transactions', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    errEl.textContent = d.error || 'Failed to save transaction.';
+    errEl.style.display = 'block';
+    return;
+  }
+  closeAddTxModal();
+  await loadTransactions();
 }
 
 // ── INIT ──

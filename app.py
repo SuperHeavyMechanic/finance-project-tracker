@@ -11,8 +11,8 @@ import pypdf
 
 from db import (init_db, get_accounts, save_upload, save_staged, check_duplicate,
                 get_transactions, get_transactions_by_ids, update_transaction, delete_transaction,
-                get_staged, update_staged, delete_staged_tx, confirm_upload, discard_upload,
-                get_dashboard_data, get_settlements, get_statements,
+                create_transaction, get_staged, update_staged, delete_staged_tx, confirm_upload,
+                discard_upload, get_dashboard_data, get_settlements, get_statements,
                 parse_date, _dominant_month)
 from rules import apply_rules, build_rules_prompt, build_bank_notes
 
@@ -257,6 +257,15 @@ def api_transactions():
         upload_id=request.args.get('upload_id'),
     )
     return jsonify(rows)
+
+
+@app.route('/api/transactions', methods=['POST'])
+def api_create_tx():
+    data = request.json or {}
+    if not data.get('account_id') or not data.get('date_parsed') or data.get('amount') is None:
+        return jsonify({'error': 'account_id, date_parsed, and amount are required'}), 400
+    tx_id = create_transaction(data)
+    return jsonify({'ok': True, 'id': tx_id})
 
 
 @app.route('/api/transactions/<int:tx_id>', methods=['PATCH'])
