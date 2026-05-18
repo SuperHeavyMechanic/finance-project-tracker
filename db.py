@@ -151,6 +151,35 @@ def get_accounts():
     conn.close()
     return [dict(r) for r in rows]
 
+def create_account(fields):
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO accounts (owner, name, bank, last_four, account_type) VALUES (?,?,?,?,?)',
+        (fields.get('owner',''), fields.get('name',''), fields.get('bank',''),
+         fields.get('last_four',''), fields.get('account_type','credit'))
+    )
+    conn.commit()
+    acc_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+    conn.close()
+    return acc_id
+
+def update_account(acc_id, fields):
+    allowed = {'owner', 'name', 'bank', 'last_four', 'account_type'}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    conn = get_db()
+    clause = ', '.join(f'{k}=?' for k in updates)
+    conn.execute(f'UPDATE accounts SET {clause} WHERE id=?', list(updates.values()) + [acc_id])
+    conn.commit()
+    conn.close()
+
+def delete_account(acc_id):
+    conn = get_db()
+    conn.execute('DELETE FROM accounts WHERE id=?', (acc_id,))
+    conn.commit()
+    conn.close()
+
 def _dominant_month(transactions):
     dates = [t.get('date_parsed') for t in transactions if t.get('date_parsed')]
     if not dates:

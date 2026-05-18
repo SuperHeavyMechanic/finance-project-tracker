@@ -400,7 +400,10 @@
 
   <!-- ── ACCOUNTS ── -->
   <div id="view-accounts" class="view">
-    <div class="page-title">Accounts</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+      <div class="page-title" style="margin:0">Accounts</div>
+      <button class="btn btn-sm" onclick="openAccModal()">+ Add Account</button>
+    </div>
     <div id="accounts-list"></div>
   </div>
 
@@ -534,6 +537,48 @@
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeAddTxModal()">Cancel</button>
       <button class="btn btn-sm" onclick="submitAddTx()">Save Transaction</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ACCOUNT MODAL (add / edit) ── -->
+<div class="modal-overlay" id="acc-modal" onclick="if(event.target===this)closeAccModal()">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title" id="acc-modal-title">Add Account</div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="step-row" style="grid-column:1/-1">
+          <div class="step-label">Account Name *</div>
+          <input type="text" id="acc-name" class="step-select" placeholder="e.g. CC BNI VISA GARUDA" style="padding:8px 12px">
+        </div>
+        <div class="step-row">
+          <div class="step-label">Owner *</div>
+          <select id="acc-owner" class="step-select" style="padding:8px 12px">
+            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
+          </select>
+        </div>
+        <div class="step-row">
+          <div class="step-label">Account Type *</div>
+          <select id="acc-type" class="step-select" style="padding:8px 12px">
+            <option value="credit">Credit Card</option>
+            <option value="debit">Debit / Bank</option>
+            <option value="cash">Cash</option>
+          </select>
+        </div>
+        <div class="step-row">
+          <div class="step-label">Bank</div>
+          <input type="text" id="acc-bank" class="step-select" placeholder="e.g. BNI" style="padding:8px 12px">
+        </div>
+        <div class="step-row">
+          <div class="step-label">Last 4 Digits</div>
+          <input type="text" id="acc-last-four" class="step-select" placeholder="e.g. 1234" maxlength="10" style="padding:8px 12px">
+        </div>
+      </div>
+      <div id="acc-modal-error" style="display:none;margin-top:12px;color:#c0392b;font-size:13px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeAccModal()">Cancel</button>
+      <button class="btn btn-sm" id="acc-modal-save" onclick="submitAccModal()">Save</button>
     </div>
   </div>
 </div>
@@ -1250,18 +1295,27 @@ async function markAllSettled() {
 
 // ── ACCOUNTS ──
 async function loadAccounts() {
+  allAccounts = await api('/api/accounts');
   const el = document.getElementById('accounts-list');
-  const groups = {SHAN: [], JANICE: [], JOINT: []};
+  const groups = {};
   allAccounts.forEach(a => (groups[a.owner] || (groups[a.owner] = [])).push(a));
 
-  el.innerHTML = Object.entries(groups).filter(([,v]) => v.length).map(([owner, accs]) => `
+  el.innerHTML = Object.entries(groups).map(([owner, accs]) => `
     <div class="accounts-group">
       <div class="accounts-group-title">${ownerBadge(owner)} ${owner}</div>
       <div class="account-cards">
         ${accs.map(a => `
           <div class="account-card">
-            <div class="acc-name">${esc(a.name)}</div>
-            <div class="acc-meta">${esc(a.bank||'')}${a.last_four ? ' · ···· ' + a.last_four : ''}</div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+              <div>
+                <div class="acc-name">${esc(a.name)}</div>
+                <div class="acc-meta">${esc(a.bank||'')}${a.last_four ? ' · ···· ' + a.last_four : ''} · ${esc(a.account_type||'')}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0">
+                <button class="btn-del" style="color:#0071e3;border-color:#0071e3;opacity:1" onclick="openAccModal(${a.id})" title="Edit">✎</button>
+                <button class="btn-del" onclick="deleteAccount(${a.id},'${esc(a.name)}')" title="Delete">✕</button>
+              </div>
+            </div>
             <div class="acc-stat">
               <span>${a.tx_count || 0} transactions</span>
               ${a.last_upload ? `<span>Last: ${a.last_upload.slice(0,10)}</span>` : ''}
@@ -1637,6 +1691,63 @@ async function discardReview(uploadId) {
 
 function closeReviewModal() {
   document.getElementById('review-modal').classList.remove('visible');
+}
+
+// ── ACCOUNT CRUD ──
+let _accModalId = null;
+
+function openAccModal(id) {
+  _accModalId = id || null;
+  const acc = id ? allAccounts.find(a => a.id === id) : null;
+  document.getElementById('acc-modal-title').textContent = acc ? 'Edit Account' : 'Add Account';
+  document.getElementById('acc-modal-save').textContent  = acc ? 'Save Changes' : 'Add Account';
+  document.getElementById('acc-name').value      = acc ? acc.name      : '';
+  document.getElementById('acc-owner').value     = acc ? acc.owner     : 'SHAN';
+  document.getElementById('acc-type').value      = acc ? (acc.account_type || 'credit') : 'credit';
+  document.getElementById('acc-bank').value      = acc ? (acc.bank || '') : '';
+  document.getElementById('acc-last-four').value = acc ? (acc.last_four || '') : '';
+  document.getElementById('acc-modal-error').style.display = 'none';
+  document.getElementById('acc-modal').classList.add('visible');
+  setTimeout(() => document.getElementById('acc-name').focus(), 50);
+}
+
+function closeAccModal() {
+  document.getElementById('acc-modal').classList.remove('visible');
+}
+
+async function submitAccModal() {
+  const errEl = document.getElementById('acc-modal-error');
+  errEl.style.display = 'none';
+  const name  = document.getElementById('acc-name').value.trim();
+  const owner = document.getElementById('acc-owner').value;
+  if (!name)  { errEl.textContent = 'Account name is required.'; errEl.style.display = 'block'; return; }
+  if (!owner) { errEl.textContent = 'Owner is required.';        errEl.style.display = 'block'; return; }
+
+  const body = {
+    name,
+    owner,
+    account_type: document.getElementById('acc-type').value,
+    bank:         document.getElementById('acc-bank').value.trim(),
+    last_four:    document.getElementById('acc-last-four').value.trim(),
+  };
+
+  const url    = _accModalId ? `/api/accounts/${_accModalId}` : '/api/accounts';
+  const method = _accModalId ? 'PATCH' : 'POST';
+  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    errEl.textContent = d.error || 'Failed to save account.';
+    errEl.style.display = 'block';
+    return;
+  }
+  closeAccModal();
+  await loadAccounts();
+}
+
+async function deleteAccount(id, name) {
+  if (!confirm(`Delete account "${name}"?\n\nThis will NOT delete existing transactions — they will remain but lose their account link.`)) return;
+  await fetch(`/api/accounts/${id}`, {method: 'DELETE'});
+  await loadAccounts();
 }
 
 // ── ADD TRANSACTION ──

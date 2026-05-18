@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 import anthropic
 import pypdf
 
-from db import (init_db, get_accounts, save_upload, save_staged, check_duplicate,
+from db import (init_db, get_accounts, create_account, update_account, delete_account,
+                save_upload, save_staged, check_duplicate,
                 get_transactions, get_transactions_by_ids, update_transaction, delete_transaction,
                 create_transaction, get_staged, update_staged, delete_staged_tx, confirm_upload,
                 discard_upload, get_dashboard_data, get_settlements, get_statements,
@@ -119,6 +120,24 @@ def index():
 @app.route('/api/accounts')
 def api_accounts():
     return jsonify(get_accounts())
+
+@app.route('/api/accounts', methods=['POST'])
+def api_create_account():
+    data = request.json or {}
+    if not data.get('name') or not data.get('owner'):
+        return jsonify({'error': 'name and owner are required'}), 400
+    acc_id = create_account(data)
+    return jsonify({'ok': True, 'id': acc_id})
+
+@app.route('/api/accounts/<int:acc_id>', methods=['PATCH'])
+def api_update_account(acc_id):
+    update_account(acc_id, request.json or {})
+    return jsonify({'ok': True})
+
+@app.route('/api/accounts/<int:acc_id>', methods=['DELETE'])
+def api_delete_account(acc_id):
+    delete_account(acc_id)
+    return jsonify({'ok': True})
 
 
 @app.route('/api/upload', methods=['POST'])
