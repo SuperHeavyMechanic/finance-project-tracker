@@ -243,7 +243,7 @@ def get_transactions(owner=None, month=None, account_id=None, category=None,
     return [dict(r) for r in rows]
 
 def update_transaction(tx_id, fields):
-    allowed = {'category', 'is_real_expense', 'paid_by', 'ideal_paid_by', 'settled', 'settled_date', 'amount'}
+    allowed = {'category', 'is_real_expense', 'paid_by', 'ideal_paid_by', 'settled', 'settled_date', 'amount', 'date_parsed', 'description'}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return

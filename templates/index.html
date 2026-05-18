@@ -813,14 +813,14 @@ function renderTxTable() {
     const selCls = isSelected ? 'tx-selected' : '';
     return `<tr class="${selCls}">
       <td style="text-align:center"><input type="checkbox" class="tx-chk inline-check" data-id="${t.id}" ${checked} onchange="toggleTxSel(${t.id},this.checked)"></td>
-      <td style="white-space:nowrap;color:#6e6e73">${fmtDate(t.date_parsed)}</td>
+      <td style="white-space:nowrap;color:#6e6e73"><span onclick="startDateEdit(this,${t.id},'${t.date_parsed||''}')" style="cursor:pointer;border-bottom:1px dashed #d0d0d5" title="Click to edit">${fmtDate(t.date_parsed)}</span></td>
       <td>
         <select class="inline-select cat-badge ${CAT_CLASS[t.category]||'cat-OTHERS'}"
                 onchange="patchTx(${t.id},{category:this.value},this,'cat-badge',CAT_CLASS)">
           ${catOpts}
         </select>
       </td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(t.description)}">${esc(t.description||'—')}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span onclick="startDescEdit(this,${t.id})" style="cursor:pointer;border-bottom:1px dashed #d0d0d5;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.description)||'Click to edit'}">${esc(t.description||'—')}</span></td>
       <td class="amount-col ${amtCls}" style="white-space:nowrap">
         <span onclick="startAmountEdit(this,${t.id},${t.amount})" style="cursor:pointer;border-bottom:1px dashed #d0d0d5" title="Click to edit">${fmtAmount(t.amount)}</span>
         ${t.original_currency ? `<div style="font-size:11px;color:#8e8e93">${t.original_currency} ${t.original_amount?.toLocaleString()}</div>` : ''}
@@ -885,6 +885,55 @@ function startAmountEdit(spanEl, id, currentAmount) {
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') input.blur();
     if (e.key === 'Escape') td.replaceChild(spanEl, input);
+  });
+  td.replaceChild(input, spanEl);
+  input.focus();
+  input.select();
+}
+
+function startDateEdit(spanEl, id, currentDate) {
+  const td = spanEl.closest('td');
+  const input = document.createElement('input');
+  input.type = 'date';
+  input.value = currentDate || '';
+  input.style.cssText = 'border:1px solid #0071e3;border-radius:6px;padding:2px 4px;font:inherit;font-size:12px;color:#1d1d1f;background:#fff;outline:none';
+  async function save() {
+    const val = input.value;
+    td.replaceChild(spanEl, input);
+    if (val && val !== currentDate) {
+      await patchTx(id, {date_parsed: val});
+      renderTxTable();
+    }
+  }
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { td.replaceChild(spanEl, input); }
+  });
+  td.replaceChild(input, spanEl);
+  input.focus();
+}
+
+function startDescEdit(spanEl, id) {
+  const td = spanEl.closest('td');
+  const currentDesc = spanEl.textContent === '—' ? '' : spanEl.textContent;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentDesc;
+  input.style.cssText = 'border:1px solid #0071e3;border-radius:6px;padding:2px 6px;font:inherit;font-size:13px;color:#1d1d1f;background:#fff;outline:none;width:200px';
+  async function save() {
+    const val = input.value.trim();
+    spanEl.textContent = val || '—';
+    spanEl.title = val || 'Click to edit';
+    td.replaceChild(spanEl, input);
+    if (val !== currentDesc) {
+      await patchTx(id, {description: val});
+    }
+  }
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { td.replaceChild(spanEl, input); }
   });
   td.replaceChild(input, spanEl);
   input.focus();
