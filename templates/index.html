@@ -475,6 +475,17 @@
     <option value="">Reassign category…</option>
   </select>
   <div class="abar-sep"></div>
+  <select class="abar-select" id="abar-paid-by" onchange="bulkReassignPaidBy(this.value)">
+    <option value="">Actual Source…</option>
+    <option>SHAN</option><option>JANICE</option><option>JOINT</option><option>CASH</option>
+  </select>
+  <div class="abar-sep"></div>
+  <select class="abar-select" id="abar-ideal-pb" onchange="bulkReassignIdealPaidBy(this.value)">
+    <option value="">Ideal Source…</option>
+    <option value="SHAN">SHAN</option><option value="JANICE">JANICE</option><option value="JOINT">JOINT</option>
+    <option value="__clear__">— Clear —</option>
+  </select>
+  <div class="abar-sep"></div>
   <button class="abar-btn danger" onclick="bulkDelete()">Delete</button>
   <div class="abar-sep"></div>
   <button class="abar-btn" onclick="clearSelection()">✕ Clear</button>
@@ -1133,6 +1144,31 @@ async function bulkReassignCategory(cat) {
   txRows.forEach(r => { if (selectedTxIds.has(r.id)) r.category = cat; });
   allTxRows.forEach(r => { if (selectedTxIds.has(r.id)) r.category = cat; });
   document.getElementById('abar-cat').value = '';
+  renderTxTable();
+}
+
+async function bulkReassignPaidBy(val) {
+  document.getElementById('abar-paid-by').value = '';
+  if (!val || !selectedTxIds.size) return;
+  const ids = [...selectedTxIds];
+  await Promise.all(ids.map(id =>
+    fetch(`/api/transactions/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({paid_by: val})})
+  ));
+  txRows.forEach(r => { if (selectedTxIds.has(r.id)) r.paid_by = val; });
+  allTxRows.forEach(r => { if (selectedTxIds.has(r.id)) r.paid_by = val; });
+  renderTxTable();
+}
+
+async function bulkReassignIdealPaidBy(val) {
+  document.getElementById('abar-ideal-pb').value = '';
+  if (!val || !selectedTxIds.size) return;
+  const resolved = val === '__clear__' ? null : val;
+  const ids = [...selectedTxIds];
+  await Promise.all(ids.map(id =>
+    fetch(`/api/transactions/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ideal_paid_by: resolved})})
+  ));
+  txRows.forEach(r => { if (selectedTxIds.has(r.id)) r.ideal_paid_by = resolved; });
+  allTxRows.forEach(r => { if (selectedTxIds.has(r.id)) r.ideal_paid_by = resolved; });
   renderTxTable();
 }
 
