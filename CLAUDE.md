@@ -52,7 +52,7 @@ Four Python files + one HTML file. No build step.
 - PDF decryption: tries empty-string password first before prompting user (handles BCA-style "encrypted with no password" PDFs)
 - Duplicate detection runs before staging; returns `{duplicate:true}` with in-memory transactions so frontend can confirm
 
-**`templates/index.html`** — single-file SPA (~1870 lines). Vanilla JS + Chart.js (CDN). Six views via `navigate(view)`. Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `pendingUploadId`, `pendingDuplicate`.
+**`templates/index.html`** — single-file SPA (~2010 lines). Vanilla JS + Chart.js (CDN). Six views via `navigate(view)`. Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `pendingUploadId`, `pendingDuplicate`, `dashOwner`, `dashMonth`.
 
 ## Data Model
 
@@ -126,7 +126,7 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 | POST | `/api/transactions` | Manual entry: direct insert, no upload_id |
 | PATCH | `/api/transactions/<id>` | Update any allowed field (see `update_transaction` above) |
 | DELETE | `/api/transactions/<id>` | Delete a confirmed transaction |
-| GET | `/api/dashboard` | Trend + summary scoped to months with actual data |
+| GET | `/api/dashboard` | Trend + summary scoped to months with actual data; `owner` filter applies to `t.ideal_paid_by`, not `a.owner` |
 | GET | `/api/settlements` | Transactions where paid_by ≠ account owner |
 | GET | `/api/statements` | Uploads grouped by account; includes staged_count for pending-review detection |
 | GET | `/api/export` | CSV download; `ids=1,2,3` for selected rows, `upload_id=N` for full statement |
@@ -141,6 +141,9 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 - Actual Source (`paid_by`) values: SHAN, JANICE, JOINT — CASH is an account type, not a paid_by value
 - CSV `Amount` column: IDR integer only (`int(round(amount))`), no foreign currency, no decimals; rows sorted ascending by date
 - `allAccounts` is refreshed from the API every time `loadAccounts()` runs — the Add Transaction modal always reflects the current account list
+- Dashboard `owner` tab filters by `t.ideal_paid_by` (Ideal Source), **not** by `a.owner` (account ownership) — this applies to both the trend chart (`get_dashboard_data` in `db.py`) and the category breakdown panel (`loadBreakdown` in `index.html`, which passes `ideal_paid_by=` to `/api/transactions`)
+- Dashboard breakdown panel: `loadBreakdown(month, category)` fetches transactions and renders per-item bars + Actual Source badge; `toggleBpEdit(id)` / `saveBpEdit(id, month, origCategory)` handle inline editing that PATCHes directly to `/api/transactions/<id>`
+- Chart totals: `stackTotalsPlugin` (defined inline in `renderTrend`) draws the month total above each stacked bar using Chart.js `afterDatasetsDraw`
 
 ## Git & GitHub Workflow
 

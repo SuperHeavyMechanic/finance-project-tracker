@@ -51,13 +51,17 @@
     .breakdown-panel .bp-header { font-size: 13px; font-weight: 700; color: #1d1d1f; margin-bottom: 4px; }
     .breakdown-panel .bp-sub { font-size: 11px; color: #8e8e93; margin-bottom: 16px; }
     .breakdown-panel .bp-hint { font-size: 12px; color: #b0b0b5; text-align: center; margin-top: 40px; }
-    .bp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .bp-bar-wrap { flex: 1; height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
+    .bp-header-row, .bp-row { display: grid; grid-template-columns: 1fr 40px 92px 30px 54px 20px; gap: 8px; align-items: center; }
+    .bp-header-row { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e8e8ed; }
+    .bp-header-row > * { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #8e8e93; }
+    .bp-row { margin-bottom: 10px; }
+    .bp-bar-wrap { height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
     .bp-bar { height: 100%; border-radius: 3px; }
-    .bp-label { font-size: 12px; color: #3d3d3f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 38%; }
-    .bp-amount { font-size: 12px; font-weight: 600; color: #1d1d1f; white-space: nowrap; flex: 0 0 68px; text-align: right; }
-    .bp-pct { font-size: 11px; color: #8e8e93; flex: 0 0 36px; text-align: right; }
-    .bp-edit-btn { background: none; border: none; cursor: pointer; color: #b0b0b5; font-size: 13px; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+    .bp-label { font-size: 12px; color: #3d3d3f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .bp-amount { font-size: 12px; font-weight: 600; color: #1d1d1f; white-space: nowrap; text-align: right; }
+    .bp-pct { font-size: 11px; color: #8e8e93; text-align: right; }
+    .bp-source { text-align: center; }
+    .bp-edit-btn { background: none; border: none; cursor: pointer; color: #b0b0b5; font-size: 13px; padding: 0; line-height: 1; }
     .bp-edit-btn:hover { color: #0071e3; }
     .bp-edit-form { background: #f7f7fa; border-radius: 10px; padding: 12px; margin-bottom: 10px; display: none; }
     .bp-edit-form.open { display: block; }
@@ -915,12 +919,15 @@ async function loadBreakdown(month, category) {
     const barW = catTotal ? (r.amount / real[0].amount * 100).toFixed(1) : 0;
     const desc = r.description || '—';
     const safeDesc = desc.replace(/"/g, '&quot;');
+    const src = r.paid_by || '—';
+    const srcBadge = r.paid_by ? `<span class="owner-badge owner-${r.paid_by}" style="font-size:10px;padding:1px 6px">${r.paid_by}</span>` : `<span style="font-size:11px;color:#b0b0b5">—</span>`;
     return `
     <div class="bp-row" id="bpr-${r.id}">
       <div class="bp-label" title="${safeDesc}">${desc}</div>
       <div class="bp-bar-wrap"><div class="bp-bar" style="width:${barW}%;background:${color}"></div></div>
       <div class="bp-amount">${fmtAmount(r.amount)}</div>
       <div class="bp-pct">${pct}%</div>
+      <div class="bp-source">${srcBadge}</div>
       <button class="bp-edit-btn" title="Edit" onclick="toggleBpEdit(${r.id})">✎</button>
     </div>
     <div class="bp-edit-form" id="bpf-${r.id}">
@@ -940,6 +947,14 @@ async function loadBreakdown(month, category) {
   panel.innerHTML = `
     <div class="bp-header" style="color:${color}">${category}</div>
     <div class="bp-sub">${monthLabel} · ${fmtAmount(catTotal)} total · ${real.length} items</div>
+    <div class="bp-header-row">
+      <div>Description</div>
+      <div></div>
+      <div style="text-align:right">Amount</div>
+      <div style="text-align:right">%</div>
+      <div style="text-align:center">Source</div>
+      <div></div>
+    </div>
     ${rowsHtml}`;
 }
 
