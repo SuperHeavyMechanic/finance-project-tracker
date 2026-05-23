@@ -45,7 +45,28 @@
     .summary-card .value { font-size: 22px; font-weight: 700; }
     .summary-card .sub { font-size: 12px; color: #8e8e93; margin-top: 4px; }
     .summary-card.total .sub { color: rgba(255,255,255,.5); }
-    .chart-wrap { background: #fff; border-radius: 16px; border: 1px solid #e0e0e0; padding: 24px; margin-bottom: 28px; }
+    .dash-chart-row { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 28px; }
+    .chart-wrap { background: #fff; border-radius: 16px; border: 1px solid #e0e0e0; padding: 24px; flex: 0 0 65%; min-width: 0; }
+    .breakdown-panel { flex: 0 0 calc(35% - 16px); background: #fff; border-radius: 16px; border: 1px solid #e0e0e0; padding: 20px; min-width: 0; min-height: 200px; }
+    .breakdown-panel .bp-header { font-size: 13px; font-weight: 700; color: #1d1d1f; margin-bottom: 4px; }
+    .breakdown-panel .bp-sub { font-size: 11px; color: #8e8e93; margin-bottom: 16px; }
+    .breakdown-panel .bp-hint { font-size: 12px; color: #b0b0b5; text-align: center; margin-top: 40px; }
+    .bp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .bp-bar-wrap { flex: 1; height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
+    .bp-bar { height: 100%; border-radius: 3px; }
+    .bp-label { font-size: 12px; color: #3d3d3f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 38%; }
+    .bp-amount { font-size: 12px; font-weight: 600; color: #1d1d1f; white-space: nowrap; flex: 0 0 68px; text-align: right; }
+    .bp-pct { font-size: 11px; color: #8e8e93; flex: 0 0 36px; text-align: right; }
+    .bp-edit-btn { background: none; border: none; cursor: pointer; color: #b0b0b5; font-size: 13px; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+    .bp-edit-btn:hover { color: #0071e3; }
+    .bp-edit-form { background: #f7f7fa; border-radius: 10px; padding: 12px; margin-bottom: 10px; display: none; }
+    .bp-edit-form.open { display: block; }
+    .bp-edit-form label { font-size: 11px; font-weight: 600; color: #6e6e73; display: block; margin-bottom: 3px; }
+    .bp-edit-form input, .bp-edit-form select { width: 100%; box-sizing: border-box; border: 1px solid #d0d0d5; border-radius: 7px; padding: 6px 8px; font-size: 13px; margin-bottom: 8px; }
+    .bp-edit-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .bp-save-btn { background: #0071e3; color: #fff; border: none; border-radius: 980px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .bp-save-btn:hover { background: #0077ed; }
+    .bp-cancel-btn { background: none; border: 1px solid #d0d0d5; border-radius: 980px; padding: 5px 14px; font-size: 12px; cursor: pointer; }
     .month-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
     .month-pill { padding: 5px 14px; border-radius: 980px; font-size: 12px; font-weight: 500; cursor: pointer; background: #f5f5f7; color: #6e6e73; border: 1px solid #e0e0e0; transition: all .15s; }
     .month-pill.active { background: #0071e3; color: #fff; border-color: #0071e3; }
@@ -280,9 +301,14 @@
     </div>
     <div class="month-pills" id="dash-months"></div>
     <div class="summary-grid" id="dash-summary"></div>
-    <div class="chart-wrap">
-      <div class="section-title">6-Month Spending Trend</div>
-      <canvas id="trendChart" height="90"></canvas>
+    <div class="dash-chart-row">
+      <div class="chart-wrap">
+        <div class="section-title">6-Month Spending Trend</div>
+        <canvas id="trendChart" height="90"></canvas>
+      </div>
+      <div class="breakdown-panel" id="breakdown-panel">
+        <div class="bp-hint">Click a bar segment on the chart to see the category breakdown</div>
+      </div>
     </div>
   </div>
 
@@ -810,12 +836,42 @@ function renderTrend(trend) {
     borderWidth: 0,
   })).filter(ds => ds.data.some(v => v > 0));
 
+  const stackTotalsPlugin = {
+    id: 'stackTotals',
+    afterDatasetsDraw(chart) {
+      const { ctx, data, scales: { x, y } } = chart;
+      const totals = data.labels.map((_, i) =>
+        data.datasets.reduce((s, ds) => s + (ds.data[i] || 0), 0)
+      );
+      ctx.save();
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillStyle = '#444';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      totals.forEach((total, i) => {
+        if (!total) return;
+        const xPos = x.getPixelForValue(i);
+        const yPos = y.getPixelForValue(total) - 4;
+        ctx.fillText('Rp ' + (total / 1e6).toFixed(1) + 'M', xPos, yPos);
+      });
+      ctx.restore();
+    }
+  };
+
   if (trendChart) trendChart.destroy();
   trendChart = new Chart(document.getElementById('trendChart'), {
     type: 'bar',
     data: { labels: months, datasets },
     options: {
       responsive: true,
+      layout: { padding: { top: 24 } },
+      onClick(event, elements) {
+        if (!elements.length) return;
+        const el = elements[0];
+        const month = trend[el.index].month;
+        const category = datasets[el.datasetIndex].label;
+        loadBreakdown(month, category);
+      },
       plugins: {
         legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 10 } },
         tooltip: {
@@ -828,8 +884,81 @@ function renderTrend(trend) {
         x: { stacked: true, grid: { display: false } },
         y: { stacked: true, ticks: { callback: v => 'Rp ' + (v/1e6).toFixed(0) + 'M' } },
       },
-    }
+    },
+    plugins: [stackTotalsPlugin],
   });
+}
+
+async function loadBreakdown(month, category) {
+  const panel = document.getElementById('breakdown-panel');
+  panel.innerHTML = '<div class="bp-hint">Loading…</div>';
+
+  const params = new URLSearchParams({ month, category });
+  if (dashOwner && dashOwner !== 'ALL') params.set('ideal_paid_by', dashOwner);
+  const rows = await api(`/api/transactions?${params}`);
+
+  const real = rows.filter(r => r.is_real_expense && r.amount > 0)
+                    .sort((a, b) => b.amount - a.amount);
+  const catTotal = real.reduce((s, r) => s + r.amount, 0);
+  const color = CAT_COLORS[category] || '#9E9E9E';
+  const monthLabel = fmtMonth(month);
+
+  if (!real.length) {
+    panel.innerHTML = `<div class="bp-header">${category}</div><div class="bp-sub">${monthLabel}</div><div class="bp-hint">No transactions</div>`;
+    return;
+  }
+
+  const catOptions = CATEGORIES.map(c => `<option value="${c}" ${c===category?'selected':''}>${c}</option>`).join('');
+
+  const rowsHtml = real.map(r => {
+    const pct = catTotal ? Math.round(r.amount / catTotal * 100) : 0;
+    const barW = catTotal ? (r.amount / real[0].amount * 100).toFixed(1) : 0;
+    const desc = r.description || '—';
+    const safeDesc = desc.replace(/"/g, '&quot;');
+    return `
+    <div class="bp-row" id="bpr-${r.id}">
+      <div class="bp-label" title="${safeDesc}">${desc}</div>
+      <div class="bp-bar-wrap"><div class="bp-bar" style="width:${barW}%;background:${color}"></div></div>
+      <div class="bp-amount">${fmtAmount(r.amount)}</div>
+      <div class="bp-pct">${pct}%</div>
+      <button class="bp-edit-btn" title="Edit" onclick="toggleBpEdit(${r.id})">✎</button>
+    </div>
+    <div class="bp-edit-form" id="bpf-${r.id}">
+      <label>Description</label>
+      <input id="bpf-desc-${r.id}" value="${safeDesc}">
+      <label>Amount (IDR)</label>
+      <input id="bpf-amt-${r.id}" type="number" value="${Math.round(r.amount)}">
+      <label>Category</label>
+      <select id="bpf-cat-${r.id}">${catOptions}</select>
+      <div class="bp-edit-actions">
+        <button class="bp-cancel-btn" onclick="toggleBpEdit(${r.id})">Cancel</button>
+        <button class="bp-save-btn" onclick="saveBpEdit(${r.id},'${month}','${category}')">Save</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="bp-header" style="color:${color}">${category}</div>
+    <div class="bp-sub">${monthLabel} · ${fmtAmount(catTotal)} total · ${real.length} items</div>
+    ${rowsHtml}`;
+}
+
+function toggleBpEdit(id) {
+  document.getElementById(`bpf-${id}`).classList.toggle('open');
+}
+
+async function saveBpEdit(id, month, origCategory) {
+  const desc = document.getElementById(`bpf-desc-${id}`).value.trim();
+  const amt  = parseFloat(document.getElementById(`bpf-amt-${id}`).value);
+  const cat  = document.getElementById(`bpf-cat-${id}`).value;
+  if (!desc || isNaN(amt) || amt <= 0) return;
+  await fetch(`/api/transactions/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description: desc, amount: amt, category: cat }),
+  });
+  // reload breakdown with the (possibly new) category context
+  loadBreakdown(month, cat === origCategory ? origCategory : cat);
 }
 
 // ── TRANSACTIONS ──

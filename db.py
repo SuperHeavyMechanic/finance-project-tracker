@@ -342,7 +342,7 @@ def delete_transaction(tx_id):
 def get_dashboard_data(owner=None, months=6):
     conn = get_db()
 
-    of = "AND a.owner=?" if (owner and owner != 'ALL') else ""
+    of = "AND t.ideal_paid_by=?" if (owner and owner != 'ALL') else ""
     op = [owner] if (owner and owner != 'ALL') else []
 
     # Use the N most recent months that actually have data
