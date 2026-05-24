@@ -733,9 +733,19 @@ function fmtDateObj(d) {
 
 function parseStatementDateLabel(statementDate, statementMonth) {
   if (statementDate) {
-    const d = statementDate.includes('-')
-      ? new Date(statementDate + 'T00:00:00')
-      : (() => { const [dd,mm,yyyy] = statementDate.split('/'); return new Date(`${yyyy}-${mm}-${dd}T00:00:00`); })();
+    let d;
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(statementDate)) {
+      // DD/MM/YYYY
+      const [dd, mm, yyyy] = statementDate.split('/');
+      d = new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T00:00:00`);
+    } else if (/^\d{1,2}-\d{2}-\d{4}$/.test(statementDate)) {
+      // DD-MM-YYYY
+      const [dd, mm, yyyy] = statementDate.split('-');
+      d = new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T00:00:00`);
+    } else {
+      // DD-Mmm-YY, ISO, or other — try direct parse
+      d = new Date(statementDate + 'T00:00:00');
+    }
     if (!isNaN(d)) return fmtDateObj(d);
     return statementDate;
   }

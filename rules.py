@@ -30,7 +30,9 @@ BCA Rekening Tahapan — bank-specific extraction notes:
 - Poket Valas: ignore all rows in any section where MATA UANG ≠ IDR
 - BIAYA ADM: extract as DB, category OTHERS, is_real_expense true""",
 
-    'BNI': "",
+    'BNI': """\
+BNI credit card — bank-specific extraction notes:
+- statement_date: use the billing/due date printed on the statement header, converting to DD/MM/YYYY format (e.g. "20/05/2026")""",
     'Mandiri': "",
     'Jenius': "",
 
