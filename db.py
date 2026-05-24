@@ -31,6 +31,10 @@ def parse_date(s):
     if m:
         d, mo, y = m.groups()
         return f"{y}-{mo.zfill(2)}-{d.zfill(2)}"
+    m = re.match(r'^(\d{1,2})[/\-](\d{1,2})[/\-](\d{2})$', s)
+    if m:
+        d, mo, y = m.groups()
+        return f"20{y}-{mo.zfill(2)}-{d.zfill(2)}"
     m = re.match(r'^(\d{1,2})[\s\-]([A-Za-z]{3})[\s\-](\d{2,4})$', s)
     if m:
         d, mon, y = m.groups()

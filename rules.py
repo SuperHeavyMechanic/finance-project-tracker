@@ -14,6 +14,7 @@ ACCOUNT_RULES = {
     'Mandiri': {},
     'Jenius': {},
     'BCA': {},
+    'Maybank': {},
 }
 
 # ── PER-BANK EXTRACTION NOTES ────────────────────────────────────────────────
@@ -32,6 +33,16 @@ BCA Rekening Tahapan — bank-specific extraction notes:
     'BNI': "",
     'Mandiri': "",
     'Jenius': "",
+
+    'Maybank': """\
+Maybank credit card — bank-specific extraction notes:
+- Dates are printed as DD-MM-YY (e.g. "23-04-26"); keep this exact format in the date field — do NOT convert
+- The transaction table has two date columns: "Tgl. Transaksi" (transaction date) and "Tgl. Tercatat" (posted date). Always use "Tgl. Transaksi" as the date field
+- statement_date: use the "Tgl. Jatuh Tempo" (due date) value from the statement header, converting from DD-MM-YY to DD/MM/YYYY (e.g. "04-06-26" → "04/06/2026")
+- Skip the "BALANCE OF LAST MONTH" row — it is not a transaction
+- Rows with "CR" at the end of the amount are refunds or credits; set transaction_type = "CR", is_real_expense = false for all CR rows
+- Payment rows (e.g. "PAYMENT FROM IBS") are transaction_type = "CR", is_real_expense = false
+- Description: use the merchant name only; strip trailing city, location, and currency code (e.g. "JAKARTA BARAT ID", "Internet SG")""",
 }
 
 
