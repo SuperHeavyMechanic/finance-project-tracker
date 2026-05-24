@@ -107,6 +107,7 @@ def init_db():
         "ALTER TABLE uploads ADD COLUMN statement_date TEXT",
         "ALTER TABLE uploads ADD COLUMN original_total_amount REAL DEFAULT 0",
         "ALTER TABLE transactions ADD COLUMN ideal_paid_by TEXT",
+        "ALTER TABLE staged_transactions ADD COLUMN ideal_paid_by TEXT",
         "ALTER TABLE accounts ADD COLUMN account_type TEXT DEFAULT 'credit'",
     ]:
         try:
@@ -451,6 +452,8 @@ def get_statements():
 
 def save_staged(account_id, filename, transactions, statement_date=None):
     conn = get_db()
+    acct_row = conn.execute('SELECT owner FROM accounts WHERE id=?', (account_id,)).fetchone()
+    default_ideal = acct_row['owner'] if acct_row else None
     parsed_sd = parse_date(statement_date) if statement_date else None
     stmt_month = parsed_sd[:7] if parsed_sd else _dominant_month(transactions)
     original_total = sum(
@@ -470,8 +473,8 @@ def save_staged(account_id, filename, transactions, statement_date=None):
             INSERT INTO staged_transactions
               (upload_id, account_id, date, date_parsed, description,
                amount, category, is_real_expense, transaction_type,
-               original_currency, original_amount)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+               original_currency, original_amount, ideal_paid_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         ''', (
             upload_id, account_id,
             t.get('date'), t.get('date_parsed'),
@@ -482,6 +485,7 @@ def save_staged(account_id, filename, transactions, statement_date=None):
             t.get('transaction_type', 'DB'),
             t.get('original_currency'),
             t.get('original_amount'),
+            default_ideal,
         ))
 
     conn.commit()
@@ -505,7 +509,7 @@ def get_staged(upload_id):
 
 
 def update_staged(tx_id, fields):
-    allowed = {'category', 'description', 'amount', 'is_real_expense'}
+    allowed = {'category', 'description', 'amount', 'is_real_expense', 'ideal_paid_by'}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
@@ -543,8 +547,8 @@ def confirm_upload(upload_id):
             INSERT INTO transactions
               (upload_id, account_id, date, date_parsed, description,
                amount, currency, original_amount, original_currency,
-               category, is_real_expense, paid_by)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+               category, is_real_expense, paid_by, ideal_paid_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         ''', (
             upload_id, t['account_id'],
             t['date'], t['date_parsed'],
@@ -556,6 +560,7 @@ def confirm_upload(upload_id):
             t['category'],
             t['is_real_expense'],
             owner,
+            t['ideal_paid_by'],
         ))
 
     c.execute('UPDATE uploads SET transaction_count=? WHERE id=?', (len(staged), upload_id))
