@@ -161,25 +161,51 @@
     .success-box.visible { display: block; }
 
     /* ── SETTLEMENTS ── */
-    .balance-banner { border-radius: 14px; padding: 20px 24px; margin-bottom: 24px; }
-    .balance-banner.shan-owes  { background: #dbeafe; border: 1px solid #bfdbfe; }
-    .balance-banner.janice-owes { background: #fce7f3; border: 1px solid #fbcfe8; }
-    .balance-banner.settled    { background: #dcfce7; border: 1px solid #bbf7d0; }
-    .balance-title { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 4px; }
-    .balance-amount { font-size: 28px; font-weight: 700; }
-    .settle-owner-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .balance-summary { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 14px; padding: 20px 24px; margin-bottom: 24px; }
+    .balance-summary.all-settled { background: #dcfce7; border-color: #bbf7d0; }
+    .balance-summary-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8e8e93; margin-bottom: 14px; }
+    .balance-summary.all-settled .balance-summary-label { color: #166534; }
+    .balance-direction-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #ebebeb; }
+    .balance-direction-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .balance-direction-parties { display: flex; align-items: center; gap: 8px; }
+    .balance-direction-parties .arrow { font-size: 12px; color: #b0b0b5; }
+    .balance-direction-amount { font-size: 16px; font-weight: 700; color: #1d1d1f; font-variant-numeric: tabular-nums; }
+    .balance-all-settled-msg { font-size: 20px; font-weight: 700; color: #166534; }
+    .balance-all-settled-sub { font-size: 13px; color: #166534; opacity: .7; margin-top: 4px; }
+    .settle-panel-tabs { display: flex; gap: 0; border-bottom: 2px solid #e0e0e0; margin-bottom: 0; }
+    .settle-panel-tab { padding: 10px 20px; font-size: 13px; font-weight: 600; color: #6e6e73; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color .15s, border-color .15s; white-space: nowrap; }
+    .settle-panel-tab.active { color: #1d1d1f; border-bottom-color: #0071e3; }
+    .settle-panel-tab:hover:not(.active) { color: #3d3d3f; }
+    .settle-tab-badge { display: inline-block; background: #e8e8ed; color: #6e6e73; border-radius: 980px; font-size: 10px; font-weight: 700; padding: 1px 7px; margin-left: 5px; vertical-align: middle; line-height: 16px; }
+    .settle-panel-tab.active .settle-tab-badge { background: #0071e3; color: #fff; }
+    .settle-owner-tabs { display: flex; gap: 8px; padding: 16px 0 20px; flex-wrap: wrap; }
     .settle-month-group { margin-bottom: 28px; }
     .settle-month-header { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
-    .settle-direction-card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; }
-    .settle-direction-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .settle-direction-label { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-    .settle-direction-total { font-size: 18px; font-weight: 700; color: #1d1d1f; }
-    .settle-history { margin-top: 32px; }
-    .settle-history-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8e8e93; margin-bottom: 12px; }
-    .settle-history details { border: 1px solid #e0e0e0; border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
-    .settle-history summary { font-size: 13px; font-weight: 600; color: #6e6e73; cursor: pointer; padding: 12px 16px; background: #fafafa; list-style: none; display: flex; justify-content: space-between; align-items: center; }
-    .settle-history summary::-webkit-details-marker { display: none; }
-    .settle-history-detail { padding: 12px 16px; }
+    .settle-direction-card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+    .settle-direction-card > summary { display: flex; align-items: center; gap: 12px; padding: 14px 20px; list-style: none; cursor: pointer; user-select: none; }
+    .settle-direction-card > summary::-webkit-details-marker { display: none; }
+    .settle-direction-card > summary:hover { background: #f2f2f2; }
+    .settle-direction-label { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex: 1; }
+    .settle-direction-total { font-size: 18px; font-weight: 700; color: #1d1d1f; white-space: nowrap; }
+    .settle-direction-chevron { font-size: 10px; color: #8e8e93; transition: transform .15s; flex-shrink: 0; margin-left: 4px; }
+    .settle-direction-card[open] > summary .settle-direction-chevron { transform: rotate(180deg); }
+    .settle-direction-body { padding: 0 20px 16px; border-top: 1px solid #e8e8e8; background: #fff; }
+    .settle-history-panel { padding-top: 20px; }
+    .settle-hist-accordion { border: 1px solid #e0e0e0; border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+    .settle-hist-summary { font-size: 13px; font-weight: 600; color: #3d3d3f; cursor: pointer; padding: 13px 16px; background: #fafafa; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .settle-hist-summary::-webkit-details-marker { display: none; }
+    .settle-hist-summary-left { display: flex; flex-direction: column; gap: 3px; }
+    .settle-hist-summary-date { font-size: 13px; font-weight: 600; color: #1d1d1f; }
+    .settle-hist-summary-total { font-size: 12px; color: #6e6e73; font-weight: 400; }
+    .settle-hist-chevron { font-size: 10px; color: #8e8e93; transition: transform .15s; flex-shrink: 0; }
+    details[open] .settle-hist-chevron { transform: rotate(180deg); }
+    .settle-hist-body { padding: 4px 16px 14px; background: #fff; }
+    .settle-hist-dir { margin-top: 14px; }
+    .settle-hist-dir:first-child { margin-top: 10px; }
+    .settle-hist-dir-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f2; }
+    .settle-hist-dir-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #3d3d3f; }
+    .settle-hist-dir-label .arrow { font-size: 11px; color: #b0b0b5; }
+    .settle-hist-dir-total { font-size: 13px; font-weight: 700; color: #1d1d1f; font-variant-numeric: tabular-nums; }
 
     /* ── ACCOUNTS ── */
     .accounts-group { margin-bottom: 28px; }
@@ -408,18 +434,28 @@
   <!-- ── SETTLEMENTS ── -->
   <div id="view-settlements" class="view">
     <div class="page-title">Settlements</div>
-    <div id="balance-banner" class="balance-banner settled">
-      <div class="balance-title">Net Balance</div>
-      <div class="balance-amount" id="balance-amount">—</div>
-      <div id="balance-sub" style="font-size:13px;color:#374151;margin-top:4px;"></div>
+    <div id="balance-summary" class="balance-summary all-settled">
+      <div class="balance-summary-label">Outstanding Balance</div>
+      <div id="balance-summary-body"></div>
     </div>
-    <div class="settle-owner-tabs">
-      <button class="btn btn-sm" id="settle-tab-all" onclick="setSettleTab('ALL')">All</button>
-      <button class="btn btn-outline btn-sm" id="settle-tab-shan" onclick="setSettleTab('SHAN')">SHAN owes</button>
-      <button class="btn btn-outline btn-sm" id="settle-tab-janice" onclick="setSettleTab('JANICE')">JANICE owes</button>
+    <div class="settle-panel-tabs">
+      <button class="settle-panel-tab active" id="settle-panel-tab-outstanding" onclick="setSettlePanel('outstanding')">
+        Outstanding <span class="settle-tab-badge" id="settle-outstanding-badge">—</span>
+      </button>
+      <button class="settle-panel-tab" id="settle-panel-tab-history" onclick="setSettlePanel('history')">
+        History <span class="settle-tab-badge" id="settle-history-badge">—</span>
+      </button>
     </div>
-    <div id="settle-outstanding"></div>
-    <div id="settle-history" class="settle-history"></div>
+    <div id="settle-outstanding-panel">
+      <div class="settle-owner-tabs">
+        <button class="btn btn-sm"             id="settle-tab-all"    onclick="setSettleTab('ALL')">All</button>
+        <button class="btn btn-outline btn-sm" id="settle-tab-shan"   onclick="setSettleTab('SHAN')">SHAN owes</button>
+        <button class="btn btn-outline btn-sm" id="settle-tab-janice" onclick="setSettleTab('JANICE')">JANICE owes</button>
+        <button class="btn btn-outline btn-sm" id="settle-tab-joint"  onclick="setSettleTab('JOINT')">JOINT owes</button>
+      </div>
+      <div id="settle-outstanding"></div>
+    </div>
+    <div id="settle-history-panel" class="settle-history-panel" style="display:none"></div>
   </div>
 
   <!-- ── ACCOUNTS ── -->
@@ -1417,62 +1453,92 @@ function doExportDownload() {
 
 // ── SETTLEMENTS ──
 let settleOwnerFilter = 'ALL';
+let settleActivePanel = 'outstanding';
+
+function setSettlePanel(panel) {
+  settleActivePanel = panel;
+  document.getElementById('settle-panel-tab-outstanding').className =
+    panel === 'outstanding' ? 'settle-panel-tab active' : 'settle-panel-tab';
+  document.getElementById('settle-panel-tab-history').className =
+    panel === 'history' ? 'settle-panel-tab active' : 'settle-panel-tab';
+  document.getElementById('settle-outstanding-panel').style.display =
+    panel === 'outstanding' ? '' : 'none';
+  document.getElementById('settle-history-panel').style.display =
+    panel === 'history' ? '' : 'none';
+}
 
 function setSettleTab(tab) {
   settleOwnerFilter = tab;
-  document.getElementById('settle-tab-all').className    = tab === 'ALL'    ? 'btn btn-sm' : 'btn btn-outline btn-sm';
-  document.getElementById('settle-tab-shan').className   = tab === 'SHAN'   ? 'btn btn-sm' : 'btn btn-outline btn-sm';
-  document.getElementById('settle-tab-janice').className = tab === 'JANICE' ? 'btn btn-sm' : 'btn btn-outline btn-sm';
+  ['all','shan','janice','joint'].forEach(t => {
+    const el = document.getElementById('settle-tab-' + t);
+    if (el) el.className = (t === tab.toLowerCase()) ? 'btn btn-sm' : 'btn btn-outline btn-sm';
+  });
   loadSettlements();
 }
 
 async function loadSettlements() {
-  const all = await api('/api/settlements');
+  const all      = await api('/api/settlements');
   const unsettled = all.filter(r => !r.settled);
   const settled   = all.filter(r =>  r.settled);
 
-  // Balance banner
-  let shanOwesJanice = 0, janiceOwesShan = 0;
+  // ── Balance summary card ──
+  const dirTotals = {};
   unsettled.forEach(r => {
-    if (r.ideal_paid_by === 'SHAN'   && r.paid_by === 'JANICE') shanOwesJanice += r.amount;
-    if (r.ideal_paid_by === 'JANICE' && r.paid_by === 'SHAN')   janiceOwesShan += r.amount;
+    const dir = r.ideal_paid_by + '→' + r.paid_by;
+    dirTotals[dir] = (dirTotals[dir] || 0) + r.amount;
   });
-  const net = janiceOwesShan - shanOwesJanice;
-  const banner = document.getElementById('balance-banner');
-  const amtEl  = document.getElementById('balance-amount');
-  const subEl  = document.getElementById('balance-sub');
-  if (Math.abs(net) < 1) {
-    banner.className = 'balance-banner settled';
-    amtEl.textContent = 'All settled ✓';
-    subEl.textContent = 'No outstanding balance';
-  } else if (net > 0) {
-    banner.className = 'balance-banner janice-owes';
-    amtEl.textContent = fmtAmount(net);
-    subEl.textContent = 'JANICE owes SHAN';
+  const summaryEl     = document.getElementById('balance-summary');
+  const summaryBodyEl = document.getElementById('balance-summary-body');
+  const dirs = Object.entries(dirTotals).filter(([, amt]) => amt > 0);
+  if (!dirs.length) {
+    summaryEl.className = 'balance-summary all-settled';
+    summaryBodyEl.innerHTML =
+      '<div class="balance-all-settled-msg">All caught up</div>' +
+      '<div class="balance-all-settled-sub">No outstanding settlement obligations</div>';
   } else {
-    banner.className = 'balance-banner shan-owes';
-    amtEl.textContent = fmtAmount(Math.abs(net));
-    subEl.textContent = 'SHAN owes JANICE';
+    summaryEl.className = 'balance-summary';
+    summaryBodyEl.innerHTML = dirs
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dir, amt]) => {
+        const [from, to] = dir.split('→');
+        return `<div class="balance-direction-row">
+          <div class="balance-direction-parties">
+            ${ownerBadge(from)}<span class="arrow">owes</span>${ownerBadge(to)}
+          </div>
+          <div class="balance-direction-amount">${fmtAmount(amt)}</div>
+        </div>`;
+      }).join('');
   }
 
-  // Group outstanding: month → direction
+  // ── Outstanding tab badge ──
   const byMonth = {};
   unsettled.forEach(r => {
     const month = (r.date_parsed || '').slice(0, 7);
     if (!byMonth[month]) byMonth[month] = {};
-    const dir = `${r.ideal_paid_by}→${r.paid_by}`;
+    const dir = r.ideal_paid_by + '→' + r.paid_by;
     if (!byMonth[month][dir]) byMonth[month][dir] = [];
     byMonth[month][dir].push(r);
   });
+  let outstandingCardCount = 0;
+  Object.values(byMonth).forEach(dirMap => {
+    outstandingCardCount += Object.keys(dirMap).length;
+  });
+  document.getElementById('settle-outstanding-badge').textContent = outstandingCardCount || '0';
 
+  // ── History tab badge ──
+  const settledMonths = new Set(settled.map(r => (r.settled_date || r.date_parsed || '').slice(0, 7)));
+  document.getElementById('settle-history-badge').textContent = settledMonths.size || '0';
+
+  // ── Outstanding panel ──
   const outEl = document.getElementById('settle-outstanding');
   const months = Object.keys(byMonth).sort().reverse();
   if (!months.length) {
-    outEl.innerHTML = '<div style="color:#8e8e93;font-size:14px;padding:12px 0">No outstanding settlements.</div>';
+    outEl.innerHTML = '<div style="color:#8e8e93;font-size:14px;padding:20px 0">No outstanding settlements.</div>';
   } else {
     outEl.innerHTML = months.map(month => {
       const cards = Object.entries(byMonth[month])
         .filter(([dir]) => settleOwnerFilter === 'ALL' || dir.startsWith(settleOwnerFilter + '→'))
+        .filter(([, txs]) => txs.reduce((s, r) => s + r.amount, 0) > 0)
         .map(([dir, txs]) => {
           const [fromPerson, toPerson] = dir.split('→');
           const total = txs.reduce((s, r) => s + r.amount, 0);
@@ -1483,16 +1549,17 @@ async function loadSettlements() {
               <td style="padding:4px 8px">${catBadge(r.category)}</td>
               <td style="text-align:right;white-space:nowrap;padding:4px 0 4px 8px">${fmtAmount(r.amount)}</td>
             </tr>`).join('');
-          return `<div class="settle-direction-card">
-            <div class="settle-direction-header">
+          return `<details class="settle-direction-card">
+            <summary>
               <div class="settle-direction-label">${ownerBadge(fromPerson)} <span style="color:#8e8e93;margin:0 4px">owes</span> ${ownerBadge(toPerson)}</div>
               <div class="settle-direction-total">${fmtAmount(total)}</div>
+              <button class="btn btn-sm" style="margin-left:12px;flex-shrink:0" onclick='event.preventDefault();event.stopPropagation();openSettleModal(${JSON.stringify(ids)},"${fromPerson}","${toPerson}","${month}",${total})'>Settle now</button>
+              <span class="settle-direction-chevron">&#9660;</span>
+            </summary>
+            <div class="settle-direction-body">
+              <table style="width:100%;font-size:13px;border-collapse:collapse;margin-top:12px">${rows}</table>
             </div>
-            <table style="width:100%;font-size:13px;border-collapse:collapse">${rows}</table>
-            <div style="margin-top:12px;text-align:right">
-              <button class="btn btn-sm" onclick='openSettleModal(${JSON.stringify(ids)},"${fromPerson}","${toPerson}","${month}",${total})'>Settle this</button>
-            </div>
-          </div>`;
+          </details>`;
         }).join('');
       if (!cards) return '';
       const label = new Date(month + '-15').toLocaleString('en', {month:'long', year:'numeric'});
@@ -1500,35 +1567,60 @@ async function loadSettlements() {
         <div class="settle-month-header">${label}</div>
         ${cards}
       </div>`;
-    }).filter(Boolean).join('');
+    }).filter(Boolean).join('') ||
+      '<div style="color:#8e8e93;font-size:14px;padding:20px 0">No outstanding settlements for this filter.</div>';
   }
 
-  // Settled history grouped by settled_date month
-  const histEl = document.getElementById('settle-history');
-  if (!settled.length) { histEl.innerHTML = ''; return; }
-  const bySettledMonth = {};
+  // ── History panel ──
+  const histEl = document.getElementById('settle-history-panel');
+  if (!settled.length) {
+    histEl.innerHTML = '<div style="color:#8e8e93;font-size:14px;padding:20px 0">No settled history yet.</div>';
+    return;
+  }
+  const bySettledDate = {};
   settled.forEach(r => {
-    const key = (r.settled_date || r.date_parsed || '').slice(0, 7);
-    if (!bySettledMonth[key]) bySettledMonth[key] = [];
-    bySettledMonth[key].push(r);
+    const key = r.settled_date || '';
+    if (!bySettledDate[key]) bySettledDate[key] = {};
+    const dir = r.ideal_paid_by + '→' + r.paid_by;
+    if (!bySettledDate[key][dir]) bySettledDate[key][dir] = [];
+    bySettledDate[key][dir].push(r);
   });
-  histEl.innerHTML = `<div class="settle-history-title">Settled History</div>` +
-    Object.keys(bySettledMonth).sort().reverse().map(key => {
-      const txs   = bySettledMonth[key];
-      const total = txs.reduce((s, r) => s + r.amount, 0);
-      const label = key ? new Date(key + '-15').toLocaleString('en', {month:'long', year:'numeric'}) : 'Unknown';
-      const settledOn = txs[0].settled_date ? fmtDate(txs[0].settled_date) : '—';
-      const rows = txs.map(r => `<tr style="opacity:.75">
+  histEl.innerHTML = Object.keys(bySettledDate).sort().reverse().map(dateKey => {
+    const dirMap     = bySettledDate[dateKey];
+    const allTxs     = Object.values(dirMap).flat();
+    const grandTotal = allTxs.reduce((s, r) => s + r.amount, 0);
+    const dateLabel  = dateKey ? fmtDate(dateKey) : 'Unknown date';
+    const txCount    = allTxs.length;
+    const dirGroups  = Object.entries(dirMap).map(([dir, txs]) => {
+      const [from, to] = dir.split('→');
+      const dirTotal   = txs.reduce((s, r) => s + r.amount, 0);
+      const rows = txs.map(r => `<tr>
           <td style="color:#6e6e73;white-space:nowrap;padding:4px 8px 4px 0">${fmtDate(r.date_parsed)}</td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 8px">${esc(r.description||'—')}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 8px">${esc(r.description||'—')}</td>
           <td style="padding:4px 8px">${catBadge(r.category)}</td>
-          <td style="padding:4px 8px">${ownerBadge(r.ideal_paid_by)} <span style="color:#8e8e93">→</span> ${ownerBadge(r.paid_by)}</td>
-          <td style="text-align:right;white-space:nowrap;padding:4px 0 4px 8px">${fmtAmount(r.amount)}</td>
+          <td style="text-align:right;white-space:nowrap;padding:4px 0 4px 8px;color:#6e6e73">${fmtAmount(r.amount)}</td>
         </tr>`).join('');
-      return `<details><summary><span>${label}</span><span style="color:#374151">${fmtAmount(total)} · settled ${settledOn}</span></summary>
-        <div class="settle-history-detail"><table style="width:100%;font-size:13px;border-collapse:collapse">${rows}</table></div>
-      </details>`;
+      return `<div class="settle-hist-dir">
+        <div class="settle-hist-dir-header">
+          <div class="settle-hist-dir-label">
+            ${ownerBadge(from)}<span class="arrow">owes</span>${ownerBadge(to)}
+          </div>
+          <div class="settle-hist-dir-total">${fmtAmount(dirTotal)}</div>
+        </div>
+        <table style="width:100%;font-size:13px;border-collapse:collapse;opacity:.8">${rows}</table>
+      </div>`;
     }).join('');
+    return `<details class="settle-hist-accordion">
+      <summary class="settle-hist-summary">
+        <div class="settle-hist-summary-left">
+          <span class="settle-hist-summary-date">Settled ${dateLabel}</span>
+          <span class="settle-hist-summary-total">${fmtAmount(grandTotal)} &middot; ${txCount} transaction${txCount !== 1 ? 's' : ''}</span>
+        </div>
+        <span class="settle-hist-chevron">&#9660;</span>
+      </summary>
+      <div class="settle-hist-body">${dirGroups}</div>
+    </details>`;
+  }).join('');
 }
 
 // ── ACCOUNTS ──
