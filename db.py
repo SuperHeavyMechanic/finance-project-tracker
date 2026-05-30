@@ -21,6 +21,10 @@ _MONTH_MAP = {
     'okt': '10', 'nov': '11', 'dec': '12', 'des': '12',
 }
 
+_ALLOWED_ACCOUNT_FIELDS = frozenset({'owner', 'name', 'bank', 'last_four', 'account_type'})
+_ALLOWED_TX_FIELDS = frozenset({'category', 'is_real_expense', 'paid_by', 'ideal_paid_by', 'settled', 'settled_date', 'amount', 'date_parsed', 'description'})
+_ALLOWED_STAGED_FIELDS = frozenset({'category', 'description', 'amount', 'is_real_expense', 'ideal_paid_by'})
+
 def parse_date(s):
     if not s:
         return None
@@ -169,13 +173,15 @@ def create_account(fields):
     return acc_id
 
 def update_account(acc_id, fields):
-    allowed = {'owner', 'name', 'bank', 'last_four', 'account_type'}
-    updates = {k: v for k, v in fields.items() if k in allowed}
+    updates = {k: v for k, v in fields.items() if k in _ALLOWED_ACCOUNT_FIELDS}
     if not updates:
         return
+    cols = list(updates.keys())
     conn = get_db()
-    clause = ', '.join(f'{k}=?' for k in updates)
-    conn.execute(f'UPDATE accounts SET {clause} WHERE id=?', list(updates.values()) + [acc_id])
+    conn.execute(
+        'UPDATE accounts SET ' + ', '.join(f'{c}=?' for c in cols) + ' WHERE id=?',
+        [updates[c] for c in cols] + [acc_id]
+    )
     conn.commit()
     conn.close()
 
@@ -283,13 +289,15 @@ def get_transactions(owner=None, month=None, account_id=None, category=None,
     return [dict(r) for r in rows]
 
 def update_transaction(tx_id, fields):
-    allowed = {'category', 'is_real_expense', 'paid_by', 'ideal_paid_by', 'settled', 'settled_date', 'amount', 'date_parsed', 'description'}
-    updates = {k: v for k, v in fields.items() if k in allowed}
+    updates = {k: v for k, v in fields.items() if k in _ALLOWED_TX_FIELDS}
     if not updates:
         return
+    cols = list(updates.keys())
     conn = get_db()
-    clause = ', '.join(f'{k}=?' for k in updates)
-    conn.execute(f'UPDATE transactions SET {clause} WHERE id=?', list(updates.values()) + [tx_id])
+    conn.execute(
+        'UPDATE transactions SET ' + ', '.join(f'{c}=?' for c in cols) + ' WHERE id=?',
+        [updates[c] for c in cols] + [tx_id]
+    )
     conn.commit()
     conn.close()
 
@@ -509,13 +517,15 @@ def get_staged(upload_id):
 
 
 def update_staged(tx_id, fields):
-    allowed = {'category', 'description', 'amount', 'is_real_expense', 'ideal_paid_by'}
-    updates = {k: v for k, v in fields.items() if k in allowed}
+    updates = {k: v for k, v in fields.items() if k in _ALLOWED_STAGED_FIELDS}
     if not updates:
         return
+    cols = list(updates.keys())
     conn = get_db()
-    clause = ', '.join(f'{k}=?' for k in updates)
-    conn.execute(f'UPDATE staged_transactions SET {clause} WHERE id=?', list(updates.values()) + [tx_id])
+    conn.execute(
+        'UPDATE staged_transactions SET ' + ', '.join(f'{c}=?' for c in cols) + ' WHERE id=?',
+        [updates[c] for c in cols] + [tx_id]
+    )
     conn.commit()
     conn.close()
 

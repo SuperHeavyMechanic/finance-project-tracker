@@ -37,6 +37,15 @@ INDO_MONTHS = {
     'JULY': 7, 'AUGUST': 8, 'OCTOBER': 10, 'DECEMBER': 12,
 }
 
+def _file_magic_matches(file_bytes, media_type):
+    if media_type == 'application/pdf':
+        return file_bytes[:4] == b'%PDF'
+    if media_type == 'image/jpeg':
+        return file_bytes[:3] == b'\xff\xd8\xff'
+    if media_type == 'image/png':
+        return file_bytes[:8] == b'\x89PNG\r\n\x1a\n'
+    return False
+
 def period_to_statement_date(period_str):
     parts = (period_str or '').upper().strip().split()
     if len(parts) == 2:
@@ -157,6 +166,8 @@ def api_upload():
 
     if fname_lower.endswith('.pdf'):
         media_type = 'application/pdf'
+        if not _file_magic_matches(file_bytes, media_type):
+            return jsonify({'error': 'File content does not match its extension.'}), 400
         password = request.form.get('password', '')
         try:
             reader = pypdf.PdfReader(io.BytesIO(file_bytes))
@@ -175,8 +186,12 @@ def api_upload():
             return jsonify({'error': f'Could not read PDF: {e}'}), 400
     elif fname_lower.endswith(('.jpg', '.jpeg')):
         media_type = 'image/jpeg'
+        if not _file_magic_matches(file_bytes, media_type):
+            return jsonify({'error': 'File content does not match its extension.'}), 400
     elif fname_lower.endswith('.png'):
         media_type = 'image/png'
+        if not _file_magic_matches(file_bytes, media_type):
+            return jsonify({'error': 'File content does not match its extension.'}), 400
     else:
         return jsonify({'error': 'Unsupported file type. Please upload a PDF, JPG, or PNG.'}), 400
 
@@ -283,13 +298,18 @@ def api_create_tx():
     data = request.json or {}
     if not data.get('account_id') or not data.get('date_parsed') or data.get('amount') is None:
         return jsonify({'error': 'account_id, date_parsed, and amount are required'}), 400
+    if 'category' in data and data['category'] not in CATEGORIES:
+        return jsonify({'error': f"Invalid category '{data['category']}'"}), 400
     tx_id = create_transaction(data)
     return jsonify({'ok': True, 'id': tx_id})
 
 
 @app.route('/api/transactions/<int:tx_id>', methods=['PATCH'])
 def api_update_tx(tx_id):
-    update_transaction(tx_id, request.json or {})
+    data = request.json or {}
+    if 'category' in data and data['category'] not in CATEGORIES:
+        return jsonify({'error': f"Invalid category '{data['category']}'"}), 400
+    update_transaction(tx_id, data)
     return jsonify({'ok': True})
 
 
@@ -384,7 +404,10 @@ def api_get_staged(upload_id):
 
 @app.route('/api/staged/<int:tx_id>', methods=['PATCH'])
 def api_update_staged(tx_id):
-    update_staged(tx_id, request.json or {})
+    data = request.json or {}
+    if 'category' in data and data['category'] not in CATEGORIES:
+        return jsonify({'error': f"Invalid category '{data['category']}'"}), 400
+    update_staged(tx_id, data)
     return jsonify({'ok': True})
 
 
