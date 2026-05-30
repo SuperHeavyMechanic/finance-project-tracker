@@ -167,6 +167,19 @@
     .balance-banner.settled    { background: #dcfce7; border: 1px solid #bbf7d0; }
     .balance-title { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 4px; }
     .balance-amount { font-size: 28px; font-weight: 700; }
+    .settle-owner-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .settle-month-group { margin-bottom: 28px; }
+    .settle-month-header { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
+    .settle-direction-card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; }
+    .settle-direction-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .settle-direction-label { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .settle-direction-total { font-size: 18px; font-weight: 700; color: #1d1d1f; }
+    .settle-history { margin-top: 32px; }
+    .settle-history-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8e8e93; margin-bottom: 12px; }
+    .settle-history details { border: 1px solid #e0e0e0; border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+    .settle-history summary { font-size: 13px; font-weight: 600; color: #6e6e73; cursor: pointer; padding: 12px 16px; background: #fafafa; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+    .settle-history summary::-webkit-details-marker { display: none; }
+    .settle-history-detail { padding: 12px 16px; }
 
     /* ── ACCOUNTS ── */
     .accounts-group { margin-bottom: 28px; }
@@ -400,32 +413,13 @@
       <div class="balance-amount" id="balance-amount">—</div>
       <div id="balance-sub" style="font-size:13px;color:#374151;margin-top:4px;"></div>
     </div>
-    <div class="table-wrap">
-      <div class="table-controls">
-        <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;">
-          <input type="checkbox" id="settle-unsettled-only" onchange="loadSettlements()" checked>
-          Show unsettled only
-        </label>
-        <button class="btn btn-success btn-sm" onclick="markAllSettled()">Mark all as settled</button>
-      </div>
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Description</th>
-              <th>Category</th>
-              <th style="text-align:right">Amount</th>
-              <th>Account</th>
-              <th>Paid By</th>
-              <th>Should Be</th>
-              <th style="text-align:center">Settled?</th>
-            </tr>
-          </thead>
-          <tbody id="settle-body"></tbody>
-        </table>
-      </div>
+    <div class="settle-owner-tabs">
+      <button class="btn btn-sm" id="settle-tab-all" onclick="setSettleTab('ALL')">All</button>
+      <button class="btn btn-outline btn-sm" id="settle-tab-shan" onclick="setSettleTab('SHAN')">SHAN owes</button>
+      <button class="btn btn-outline btn-sm" id="settle-tab-janice" onclick="setSettleTab('JANICE')">JANICE owes</button>
     </div>
+    <div id="settle-outstanding"></div>
+    <div id="settle-history" class="settle-history"></div>
   </div>
 
   <!-- ── ACCOUNTS ── -->
@@ -1422,22 +1416,31 @@ function doExportDownload() {
 }
 
 // ── SETTLEMENTS ──
-async function loadSettlements() {
-  const unsettledOnly = document.getElementById('settle-unsettled-only').checked;
-  let rows = await api('/api/settlements');
-  if (unsettledOnly) rows = rows.filter(r => !r.settled);
+let settleOwnerFilter = 'ALL';
 
-  // Compute balance
-  let shanOwesJanice = 0, janiceOwesShan = 0;
+function setSettleTab(tab) {
+  settleOwnerFilter = tab;
+  document.getElementById('settle-tab-all').className    = tab === 'ALL'    ? 'btn btn-sm' : 'btn btn-outline btn-sm';
+  document.getElementById('settle-tab-shan').className   = tab === 'SHAN'   ? 'btn btn-sm' : 'btn btn-outline btn-sm';
+  document.getElementById('settle-tab-janice').className = tab === 'JANICE' ? 'btn btn-sm' : 'btn btn-outline btn-sm';
+  loadSettlements();
+}
+
+async function loadSettlements() {
   const all = await api('/api/settlements');
-  all.filter(r => !r.settled).forEach(r => {
-    if (r.paid_by === 'JANICE' && r.account_owner === 'SHAN') janiceOwesShan += r.amount;
-    if (r.paid_by === 'SHAN'   && r.account_owner === 'JANICE') shanOwesJanice += r.amount;
+  const unsettled = all.filter(r => !r.settled);
+  const settled   = all.filter(r =>  r.settled);
+
+  // Balance banner
+  let shanOwesJanice = 0, janiceOwesShan = 0;
+  unsettled.forEach(r => {
+    if (r.ideal_paid_by === 'SHAN'   && r.paid_by === 'JANICE') shanOwesJanice += r.amount;
+    if (r.ideal_paid_by === 'JANICE' && r.paid_by === 'SHAN')   janiceOwesShan += r.amount;
   });
   const net = janiceOwesShan - shanOwesJanice;
   const banner = document.getElementById('balance-banner');
-  const amtEl = document.getElementById('balance-amount');
-  const subEl = document.getElementById('balance-sub');
+  const amtEl  = document.getElementById('balance-amount');
+  const subEl  = document.getElementById('balance-sub');
   if (Math.abs(net) < 1) {
     banner.className = 'balance-banner settled';
     amtEl.textContent = 'All settled ✓';
@@ -1452,35 +1455,80 @@ async function loadSettlements() {
     subEl.textContent = 'SHAN owes JANICE';
   }
 
-  const tbody = document.getElementById('settle-body');
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="no-data">No settlement items.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = rows.map(t => `<tr style="${t.settled?'opacity:.5':''}">
-    <td style="white-space:nowrap;color:#6e6e73">${fmtDate(t.date_parsed)}</td>
-    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.description||'—')}</td>
-    <td>${catBadge(t.category)}</td>
-    <td class="amount-col" style="white-space:nowrap">${fmtAmount(t.amount)}</td>
-    <td>${esc(t.account_name)}</td>
-    <td>${ownerBadge(t.paid_by)}</td>
-    <td>${ownerBadge(t.account_owner)}</td>
-    <td style="text-align:center">
-      <input type="checkbox" class="inline-check" ${t.settled?'checked':''}
-             onchange="patchTx(${t.id},{settled:this.checked?1:0,settled_date:this.checked?new Date().toISOString().slice(0,10):null});setTimeout(loadSettlements,200)">
-    </td>
-  </tr>`).join('');
-}
+  // Group outstanding: month → direction
+  const byMonth = {};
+  unsettled.forEach(r => {
+    const month = (r.date_parsed || '').slice(0, 7);
+    if (!byMonth[month]) byMonth[month] = {};
+    const dir = `${r.ideal_paid_by}→${r.paid_by}`;
+    if (!byMonth[month][dir]) byMonth[month][dir] = [];
+    byMonth[month][dir].push(r);
+  });
 
-async function markAllSettled() {
-  const rows = await api('/api/settlements');
-  const unsettled = rows.filter(r => !r.settled);
-  const today = new Date().toISOString().slice(0, 10);
-  await Promise.all(unsettled.map(r =>
-    fetch(`/api/transactions/${r.id}`, {method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({settled: 1, settled_date: today})})
-  ));
-  loadSettlements();
+  const outEl = document.getElementById('settle-outstanding');
+  const months = Object.keys(byMonth).sort().reverse();
+  if (!months.length) {
+    outEl.innerHTML = '<div style="color:#8e8e93;font-size:14px;padding:12px 0">No outstanding settlements.</div>';
+  } else {
+    outEl.innerHTML = months.map(month => {
+      const cards = Object.entries(byMonth[month])
+        .filter(([dir]) => settleOwnerFilter === 'ALL' || dir.startsWith(settleOwnerFilter + '→'))
+        .map(([dir, txs]) => {
+          const [fromPerson, toPerson] = dir.split('→');
+          const total = txs.reduce((s, r) => s + r.amount, 0);
+          const ids   = txs.map(r => r.id);
+          const rows  = txs.map(r => `<tr>
+              <td style="color:#6e6e73;white-space:nowrap;padding:4px 8px 4px 0">${fmtDate(r.date_parsed)}</td>
+              <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 8px">${esc(r.description||'—')}</td>
+              <td style="padding:4px 8px">${catBadge(r.category)}</td>
+              <td style="text-align:right;white-space:nowrap;padding:4px 0 4px 8px">${fmtAmount(r.amount)}</td>
+            </tr>`).join('');
+          return `<div class="settle-direction-card">
+            <div class="settle-direction-header">
+              <div class="settle-direction-label">${ownerBadge(fromPerson)} <span style="color:#8e8e93;margin:0 4px">owes</span> ${ownerBadge(toPerson)}</div>
+              <div class="settle-direction-total">${fmtAmount(total)}</div>
+            </div>
+            <table style="width:100%;font-size:13px;border-collapse:collapse">${rows}</table>
+            <div style="margin-top:12px;text-align:right">
+              <button class="btn btn-sm" onclick='openSettleModal(${JSON.stringify(ids)},"${fromPerson}","${toPerson}","${month}",${total})'>Settle this</button>
+            </div>
+          </div>`;
+        }).join('');
+      if (!cards) return '';
+      const label = new Date(month + '-15').toLocaleString('en', {month:'long', year:'numeric'});
+      return `<div class="settle-month-group">
+        <div class="settle-month-header">${label}</div>
+        ${cards}
+      </div>`;
+    }).filter(Boolean).join('');
+  }
+
+  // Settled history grouped by settled_date month
+  const histEl = document.getElementById('settle-history');
+  if (!settled.length) { histEl.innerHTML = ''; return; }
+  const bySettledMonth = {};
+  settled.forEach(r => {
+    const key = (r.settled_date || r.date_parsed || '').slice(0, 7);
+    if (!bySettledMonth[key]) bySettledMonth[key] = [];
+    bySettledMonth[key].push(r);
+  });
+  histEl.innerHTML = `<div class="settle-history-title">Settled History</div>` +
+    Object.keys(bySettledMonth).sort().reverse().map(key => {
+      const txs   = bySettledMonth[key];
+      const total = txs.reduce((s, r) => s + r.amount, 0);
+      const label = key ? new Date(key + '-15').toLocaleString('en', {month:'long', year:'numeric'}) : 'Unknown';
+      const settledOn = txs[0].settled_date ? fmtDate(txs[0].settled_date) : '—';
+      const rows = txs.map(r => `<tr style="opacity:.75">
+          <td style="color:#6e6e73;white-space:nowrap;padding:4px 8px 4px 0">${fmtDate(r.date_parsed)}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 8px">${esc(r.description||'—')}</td>
+          <td style="padding:4px 8px">${catBadge(r.category)}</td>
+          <td style="padding:4px 8px">${ownerBadge(r.ideal_paid_by)} <span style="color:#8e8e93">→</span> ${ownerBadge(r.paid_by)}</td>
+          <td style="text-align:right;white-space:nowrap;padding:4px 0 4px 8px">${fmtAmount(r.amount)}</td>
+        </tr>`).join('');
+      return `<details><summary><span>${label}</span><span style="color:#374151">${fmtAmount(total)} · settled ${settledOn}</span></summary>
+        <div class="settle-history-detail"><table style="width:100%;font-size:13px;border-collapse:collapse">${rows}</table></div>
+      </details>`;
+    }).join('');
 }
 
 // ── ACCOUNTS ──
@@ -2015,6 +2063,42 @@ async function submitAddTx() {
   await loadTransactions();
 }
 
+// ── SETTLE MODAL ──
+let pendingSettleIds = [];
+
+function openSettleModal(ids, fromPerson, toPerson, month, total) {
+  pendingSettleIds = ids;
+  const label = new Date(month + '-15').toLocaleString('en', {month:'long', year:'numeric'});
+  document.getElementById('settle-modal-title').textContent = `Settle: ${fromPerson} → ${toPerson}`;
+  document.getElementById('settle-modal-body').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:14px;color:#6e6e73;margin-bottom:4px">${label}</div>
+      <div style="font-size:22px;font-weight:700">${fmtAmount(total)}</div>
+      <div style="font-size:13px;color:#6e6e73;margin-top:8px">${ownerBadge(fromPerson)} <span style="color:#8e8e93">reimburses</span> ${ownerBadge(toPerson)}</div>
+    </div>
+    <div style="font-size:12px;color:#8e8e93;margin-bottom:4px">${ids.length} transaction${ids.length !== 1 ? 's' : ''} will be marked settled</div>
+    <div style="font-size:13px;color:#374151;margin-top:8px">Settlement date: <strong>${new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'})}</strong></div>
+  `;
+  document.getElementById('settle-modal').classList.add('visible');
+}
+
+function closeSettleModal() {
+  pendingSettleIds = [];
+  document.getElementById('settle-modal').classList.remove('visible');
+}
+
+async function confirmSettle() {
+  if (!pendingSettleIds.length) return;
+  const today = new Date().toISOString().slice(0, 10);
+  await fetch('/api/settlements/settle', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ids: pendingSettleIds, settled_date: today})
+  });
+  closeSettleModal();
+  loadSettlements();
+}
+
 // ── INIT ──
 async function fetchAccounts() {
   allAccounts = await api('/api/accounts');
@@ -2026,5 +2110,18 @@ async function boot() {
 }
 boot();
 </script>
+
+  <!-- ── SETTLE CONFIRMATION MODAL ── -->
+  <div class="modal-overlay" id="settle-modal" onclick="if(event.target===this)closeSettleModal()">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-title" id="settle-modal-title">Confirm Settlement</div>
+      <div class="modal-body" id="settle-modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline btn-sm" onclick="closeSettleModal()">Cancel</button>
+        <button class="btn btn-sm" onclick="confirmSettle()">Confirm Settle</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

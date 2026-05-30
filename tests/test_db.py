@@ -203,3 +203,35 @@ class TestCategoryValidation:
                            content_type='application/json')
         assert resp.status_code == 400
         assert 'Invalid category' in resp.get_json()['error']
+
+
+# ── bulk_settle_transactions ───────────────────────────────────────────────────
+
+class TestBulkSettle:
+    def test_bulk_settle_marks_transactions(self, fresh_db):
+        acc_id = _account()
+        txs = [_tx(description='A'), _tx(description='B')]
+        upload_id, _ = db.save_staged(acc_id, 'test.pdf', txs, statement_date='30/04/2026')
+        db.confirm_upload(upload_id)
+        ids = [t['id'] for t in db.get_transactions()]
+        db.bulk_settle_transactions(ids, '2026-05-30')
+        result = db.get_transactions()
+        assert all(t['settled'] == 1 for t in result)
+        assert all(t['settled_date'] == '2026-05-30' for t in result)
+
+    def test_bulk_settle_empty_ids_returns_zero(self, fresh_db):
+        assert db.bulk_settle_transactions([], '2026-05-30') == 0
+
+    def test_bulk_settle_partial_ids(self, fresh_db):
+        acc_id = _account()
+        txs = [_tx(description='A'), _tx(description='B'), _tx(description='C')]
+        upload_id, _ = db.save_staged(acc_id, 'test.pdf', txs, statement_date='30/04/2026')
+        db.confirm_upload(upload_id)
+        all_txs = db.get_transactions()
+        partial_ids = [all_txs[0]['id']]
+        db.bulk_settle_transactions(partial_ids, '2026-05-30')
+        result = db.get_transactions()
+        settled = [t for t in result if t['settled'] == 1]
+        unsettled = [t for t in result if t['settled'] == 0]
+        assert len(settled) == 1
+        assert len(unsettled) == 2

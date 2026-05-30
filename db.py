@@ -423,11 +423,28 @@ def get_settlements():
     rows = conn.execute('''
         SELECT t.*, a.name AS account_name, a.owner AS account_owner
         FROM transactions t JOIN accounts a ON a.id=t.account_id
-        WHERE t.paid_by != a.owner AND t.is_real_expense=1 AND t.amount>0
+        WHERE t.ideal_paid_by IS NOT NULL
+          AND t.ideal_paid_by != t.paid_by
+          AND t.is_real_expense=1 AND t.amount>0
         ORDER BY t.settled ASC, t.date_parsed DESC
     ''').fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def bulk_settle_transactions(ids, settled_date):
+    if not ids:
+        return 0
+    conn = get_db()
+    placeholders = ','.join('?' * len(ids))
+    conn.execute(
+        f'UPDATE transactions SET settled=1, settled_date=? WHERE id IN ({placeholders})',
+        [settled_date] + list(ids)
+    )
+    count = conn.execute('SELECT changes()').fetchone()[0]
+    conn.commit()
+    conn.close()
+    return count
 
 
 def get_statements():

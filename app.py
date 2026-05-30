@@ -4,6 +4,7 @@ import json
 import io
 import csv
 import calendar
+from datetime import date
 from flask import Flask, request, jsonify, render_template, Response
 from dotenv import load_dotenv
 import anthropic
@@ -13,8 +14,8 @@ from db import (init_db, get_accounts, create_account, update_account, delete_ac
                 save_upload, save_staged, check_duplicate,
                 get_transactions, get_transactions_by_ids, update_transaction, delete_transaction,
                 create_transaction, get_staged, update_staged, delete_staged_tx, confirm_upload,
-                discard_upload, get_dashboard_data, get_settlements, get_statements,
-                parse_date, _dominant_month)
+                discard_upload, get_dashboard_data, get_settlements, bulk_settle_transactions,
+                get_statements, parse_date, _dominant_month)
 from rules import apply_rules, build_rules_prompt, build_bank_notes
 
 load_dotenv()
@@ -330,6 +331,17 @@ def api_dashboard():
 @app.route('/api/settlements')
 def api_settlements():
     return jsonify(get_settlements())
+
+
+@app.route('/api/settlements/settle', methods=['POST'])
+def api_settle_batch():
+    data = request.json or {}
+    ids = [int(i) for i in data.get('ids', []) if str(i).isdigit()]
+    settled_date = data.get('settled_date') or date.today().isoformat()
+    if not ids:
+        return jsonify({'error': 'No transaction IDs provided'}), 400
+    count = bulk_settle_transactions(ids, settled_date)
+    return jsonify({'ok': True, 'settled_count': count})
 
 
 @app.route('/api/statements')
