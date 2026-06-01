@@ -206,25 +206,34 @@
     .settle-hist-dir-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #3d3d3f; }
     .settle-hist-dir-label .arrow { font-size: 11px; color: #b0b0b5; }
     .settle-hist-dir-total { font-size: 13px; font-weight: 700; color: #1d1d1f; font-variant-numeric: tabular-nums; }
-    .settle-matrix-wrap { overflow-x: auto; margin-top: 4px; }
+    .settle-outstanding-layout { display: flex; gap: 16px; align-items: flex-start; }
+    .settle-matrix-pane { flex: 1 1 0; min-width: 0; overflow-x: auto; }
+    .settle-detail-pane { width: 30%; min-width: 220px; flex-shrink: 0; position: sticky; top: 72px; max-height: calc(100vh - 100px); overflow-y: auto; }
+    .settle-detail-card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 14px; padding: 18px 20px; }
+    .settle-detail-empty { color: #8e8e93; font-size: 13px; text-align: center; padding: 32px 0; line-height: 1.6; }
+    .settle-detail-dir { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #e0e0e0; }
+    .settle-detail-month { margin-bottom: 18px; }
+    .settle-detail-month-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .settle-detail-month-label { font-size: 12px; font-weight: 700; color: #3d3d3f; }
+    .settle-detail-month-right { display: flex; align-items: center; gap: 8px; }
+    .settle-detail-month-total { font-size: 13px; font-weight: 700; color: #1d1d1f; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .settle-detail-tx { display: grid; grid-template-columns: 60px 1fr auto auto; gap: 4px 8px; padding: 5px 0; border-bottom: 1px solid #f0f0f2; align-items: center; }
+    .settle-detail-tx:last-child { border-bottom: none; }
+    .settle-detail-tx-date { font-size: 11px; color: #8e8e93; white-space: nowrap; }
+    .settle-detail-tx-desc { font-size: 12px; color: #1d1d1f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .settle-detail-tx-amt { font-size: 12px; font-weight: 600; color: #1d1d1f; white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
     .settle-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
     .settle-matrix thead th { padding: 10px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6e6e73; text-align: left; border-bottom: 2px solid #e0e0e0; white-space: nowrap; background: #fff; }
-    .settle-matrix-dir-col { min-width: 210px; }
-    .settle-matrix-month-col { min-width: 155px; }
-    .settle-matrix tbody tr.settle-matrix-row td { padding: 14px 16px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; background: #fff; transition: background .1s; }
-    .settle-matrix tbody tr.settle-matrix-row:hover td { background: #fafafa; }
-    .settle-matrix-dir-cell { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .settle-matrix-dir-col { min-width: 190px; }
+    .settle-matrix-month-col { min-width: 140px; }
+    .settle-matrix tbody tr.settle-matrix-row td { padding: 12px 16px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; background: #fff; transition: background .1s; cursor: pointer; }
+    .settle-matrix tbody tr.settle-matrix-row:hover td { background: #f5f5f7; }
+    .settle-matrix tbody tr.settle-matrix-row.selected td { background: #e8f0fe; }
     .settle-matrix-dir-label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
     .settle-matrix-owes { color: #8e8e93; font-weight: 400; font-size: 12px; }
-    .settle-matrix-toggle { font-size: 10px !important; padding: 3px 9px !important; color: #8e8e93; border-color: #d0d0d5; transition: transform .15s, background .1s; }
-    .settle-matrix-toggle.open { transform: rotate(180deg); background: #e8e8ed; }
-    .settle-matrix-cell { vertical-align: middle; }
     .settle-matrix-empty { color: #c8c8cc; text-align: center; font-size: 15px; }
-    .settle-cell-amount { font-size: 15px; font-weight: 700; color: #1d1d1f; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+    .settle-cell-amount { font-size: 14px; font-weight: 700; color: #1d1d1f; margin-bottom: 5px; font-variant-numeric: tabular-nums; }
     .settle-cell-btn { font-size: 11px !important; padding: 4px 10px !important; }
-    .settle-matrix tbody tr.settle-matrix-detail td { padding: 10px 16px 16px; background: #f9f9f9; border-bottom: 1px solid #e8e8e8; vertical-align: top; }
-    .settle-matrix-detail-label { font-size: 11px; font-weight: 700; color: #8e8e93; text-transform: uppercase; letter-spacing: .05em; padding-top: 4px; white-space: nowrap; }
-    .settle-matrix-detail-cell { min-width: 155px; }
 
     /* ── ACCOUNTS ── */
     .accounts-group { margin-bottom: 28px; }
@@ -1472,6 +1481,8 @@ function doExportDownload() {
 
 // ── SETTLEMENTS ──
 let settleOwnerFilter = 'ALL';
+let _settleByMonth = {};
+let _settleMonths  = [];
 let settleActivePanel = 'outstanding';
 
 function setSettlePanel(panel) {
@@ -1548,9 +1559,11 @@ async function loadSettlements() {
   const settledMonths = new Set(settled.map(r => (r.settled_date || r.date_parsed || '').slice(0, 7)));
   document.getElementById('settle-history-badge').textContent = settledMonths.size || '0';
 
-  // ── Outstanding panel (matrix: rows=direction, cols=month) ──
+  // ── Outstanding panel (matrix: rows=direction, cols=month; detail in right pane) ──
   const outEl = document.getElementById('settle-outstanding');
   const months = Object.keys(byMonth).sort().reverse();
+  _settleByMonth = byMonth;
+  _settleMonths  = months;
   if (!months.length) {
     outEl.innerHTML = '<div style="color:#8e8e93;font-size:14px;padding:20px 0">No outstanding settlements.</div>';
   } else {
@@ -1569,48 +1582,34 @@ async function loadSettlements() {
       const bodyRows = visibleDirs.map(dir => {
         const [fromPerson, toPerson] = dir.split('→');
         const safeId = 'sdir-' + dir.replace('→', '-');
-
-        const amountCells = months.map(m => {
+        const cells = months.map(m => {
           const txs = byMonth[m] && byMonth[m][dir];
-          if (!txs || !txs.length) return '<td class="settle-matrix-cell settle-matrix-empty">—</td>';
+          if (!txs || !txs.length) return '<td class="settle-matrix-empty">—</td>';
           const total = txs.reduce((s, r) => s + r.amount, 0);
-          if (total <= 0) return '<td class="settle-matrix-cell settle-matrix-empty">—</td>';
+          if (total <= 0) return '<td class="settle-matrix-empty">—</td>';
           const ids = txs.map(r => r.id);
           return `<td class="settle-matrix-cell">
             <div class="settle-cell-amount">${fmtAmount(total)}</div>
-            <button class="btn btn-sm settle-cell-btn" onclick='openSettleModal(${JSON.stringify(ids)},"${fromPerson}","${toPerson}","${m}",${total})'>Settle</button>
+            <button class="btn btn-sm settle-cell-btn" onclick='event.stopPropagation();openSettleModal(${JSON.stringify(ids)},"${fromPerson}","${toPerson}","${m}",${total})'>Settle</button>
           </td>`;
         }).join('');
-
-        const detailCells = months.map(m => {
-          const txs = byMonth[m] && byMonth[m][dir];
-          if (!txs || !txs.length) return '<td class="settle-matrix-detail-cell settle-matrix-empty"></td>';
-          const rows = txs.map(r => `<tr>
-            <td style="color:#6e6e73;white-space:nowrap;padding:3px 8px 3px 0;font-size:12px">${fmtDate(r.date_parsed)}</td>
-            <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 8px;font-size:12px">${esc(r.description||'—')}</td>
-            <td style="padding:3px 8px;font-size:12px">${catBadge(r.category)}</td>
-            <td style="text-align:right;white-space:nowrap;padding:3px 0 3px 8px;font-size:12px;font-variant-numeric:tabular-nums">${fmtAmount(r.amount)}</td>
-          </tr>`).join('');
-          return `<td class="settle-matrix-detail-cell"><table style="width:100%;border-collapse:collapse">${rows}</table></td>`;
-        }).join('');
-
-        return `<tr class="settle-matrix-row" id="${safeId}">
-            <td class="settle-matrix-dir-cell">
-              <div class="settle-matrix-dir-label">${ownerBadge(fromPerson)} <span class="settle-matrix-owes">owes</span> ${ownerBadge(toPerson)}</div>
-              <button class="btn btn-outline btn-sm settle-matrix-toggle" onclick="toggleSettleDetail('${safeId}')">&#9660;</button>
-            </td>
-            ${amountCells}
-          </tr>
-          <tr class="settle-matrix-detail" id="${safeId}-detail" style="display:none">
-            <td class="settle-matrix-detail-label">Transactions</td>
-            ${detailCells}
+        return `<tr class="settle-matrix-row" id="${safeId}" onclick="showSettleDetail('${dir}')">
+            <td><div class="settle-matrix-dir-label">${ownerBadge(fromPerson)} <span class="settle-matrix-owes">owes</span> ${ownerBadge(toPerson)}</div></td>
+            ${cells}
           </tr>`;
       }).join('');
 
-      outEl.innerHTML = `<div class="settle-matrix-wrap"><table class="settle-matrix">
-        <thead><tr><th class="settle-matrix-dir-col">Direction</th>${headerCols}</tr></thead>
-        <tbody>${bodyRows}</tbody>
-      </table></div>`;
+      outEl.innerHTML = `<div class="settle-outstanding-layout">
+        <div class="settle-matrix-pane"><table class="settle-matrix">
+          <thead><tr><th class="settle-matrix-dir-col">Direction</th>${headerCols}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table></div>
+        <div class="settle-detail-pane" id="settle-detail-pane">
+          <div class="settle-detail-card">
+            <div class="settle-detail-empty">Click a row to see<br>transaction details</div>
+          </div>
+        </div>
+      </div>`;
     }
   }
 
@@ -1666,13 +1665,42 @@ async function loadSettlements() {
   }).join('');
 }
 
-function toggleSettleDetail(dirId) {
-  const detail = document.getElementById(dirId + '-detail');
-  const btn    = document.querySelector('#' + dirId + ' .settle-matrix-toggle');
-  if (!detail) return;
-  const opening = detail.style.display === 'none';
-  detail.style.display = opening ? '' : 'none';
-  if (btn) btn.classList.toggle('open', opening);
+function showSettleDetail(dir) {
+  const pane = document.getElementById('settle-detail-pane');
+  if (!pane) return;
+  document.querySelectorAll('.settle-matrix-row').forEach(r => r.classList.remove('selected'));
+  const safeId = 'sdir-' + dir.replace('→', '-');
+  const row = document.getElementById(safeId);
+  if (row) row.classList.add('selected');
+  const [fromPerson, toPerson] = dir.split('→');
+  const monthGroups = _settleMonths.map(m => {
+    const txs = _settleByMonth[m] && _settleByMonth[m][dir];
+    if (!txs || !txs.length) return '';
+    const total = txs.reduce((s, r) => s + r.amount, 0);
+    if (total <= 0) return '';
+    const ids  = txs.map(r => r.id);
+    const label = new Date(m + '-15').toLocaleString('en', {month:'long', year:'numeric'});
+    const txRows = txs.map(r => `<div class="settle-detail-tx">
+      <div class="settle-detail-tx-date">${fmtDate(r.date_parsed)}</div>
+      <div class="settle-detail-tx-desc">${esc(r.description||'—')}</div>
+      <div class="settle-detail-tx-cat">${catBadge(r.category)}</div>
+      <div class="settle-detail-tx-amt">${fmtAmount(r.amount)}</div>
+    </div>`).join('');
+    return `<div class="settle-detail-month">
+      <div class="settle-detail-month-header">
+        <span class="settle-detail-month-label">${label}</span>
+        <div class="settle-detail-month-right">
+          <span class="settle-detail-month-total">${fmtAmount(total)}</span>
+          <button class="btn btn-sm settle-cell-btn" onclick='openSettleModal(${JSON.stringify(ids)},"${fromPerson}","${toPerson}","${m}",${total})'>Settle</button>
+        </div>
+      </div>
+      <div class="settle-detail-txs">${txRows}</div>
+    </div>`;
+  }).filter(Boolean).join('');
+  pane.innerHTML = `<div class="settle-detail-card">
+    <div class="settle-detail-dir">${ownerBadge(fromPerson)} <span class="settle-matrix-owes">owes</span> ${ownerBadge(toPerson)}</div>
+    ${monthGroups || '<div class="settle-detail-empty">No transactions</div>'}
+  </div>`;
 }
 
 // ── ACCOUNTS ──
