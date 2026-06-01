@@ -69,7 +69,7 @@ The three `_ALLOWED_*` frozensets at module level are the authoritative whitelis
 - Duplicate detection runs before staging; returns `{duplicate:true}` with in-memory transactions so frontend can confirm
 - All write endpoints that accept `category` validate it against the `CATEGORIES` list before calling db functions
 
-**`templates/index.html`** — single-file SPA (~2100 lines). Vanilla JS + Chart.js (CDN). Six views via `navigate(view)`. Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `pendingUploadId`, `pendingDuplicate`, `dashOwner`, `dashMonth`, `settleOwnerFilter`, `pendingSettleIds`.
+**`templates/index.html`** — single-file SPA (~2350 lines). Vanilla JS + Chart.js (CDN). Six views via `navigate(view)`. Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `pendingUploadId`, `pendingDuplicate`, `dashOwner`, `dashMonth`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`.
 
 ## Data Model
 
@@ -111,7 +111,7 @@ Settlement is needed when **`ideal_paid_by ≠ paid_by`** (Ideal Source ≠ Actu
 - `paid_by` = who *actually* paid (Actual Source)
 - When they differ, `ideal_paid_by` owes `paid_by` a reimbursement
 
-The Settlements view groups outstanding transactions by month, then by direction (e.g. SHAN→JANICE). `POST /api/settlements/settle` bulk-settles a list of IDs with a given date.
+The Settlements view Outstanding tab renders a **matrix table** (rows = debtor direction, columns = months). Clicking an amount cell opens a sticky 40% right-panel (`#settle-detail-pane`) showing that cell's transactions with inline editing. Key functions: `showSettleDetail(dir, month)` — populates the detail pane and highlights the clicked cell; `toggleSdEdit(id)` / `saveSdEdit(id, dir, month)` — inline edit form that PATCHes `/api/transactions/<id>` then reloads. Module-level `_settleByMonth` and `_settleMonths` cache the last API response so the detail pane can re-render without a new fetch. `POST /api/settlements/settle` bulk-settles a list of IDs with a given date.
 
 ## Prompt Architecture (three layers, all in `rules.py` + `app.py`)
 
@@ -172,6 +172,7 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 - `allAccounts` is refreshed from the API every time `loadAccounts()` runs — the Add Transaction modal always reflects the current account list
 - Dashboard `owner` tab filters by `t.ideal_paid_by` (Ideal Source), **not** by `a.owner` (account ownership) — this applies to both the trend chart (`get_dashboard_data` in `db.py`) and the category breakdown panel (`loadBreakdown` in `index.html`, which passes `ideal_paid_by=` to `/api/transactions`)
 - Dashboard breakdown panel: `loadBreakdown(month, category)` fetches transactions and renders per-item bars + Actual Source badge; `toggleBpEdit(id)` / `saveBpEdit(id, month, origCategory)` handle inline editing that PATCHes directly to `/api/transactions/<id>`
+- Settlements detail pane: `showSettleDetail(dir, month)` renders cell-level transactions in the right panel; `toggleSdEdit(id)` / `saveSdEdit(id, dir, month)` provide the same inline-edit pattern scoped to the settlements context
 - Chart totals: `stackTotalsPlugin` (defined inline in `renderTrend`) draws the month total above each stacked bar using Chart.js `afterDatasetsDraw`
 
 ## Agent Team Roles

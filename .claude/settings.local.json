@@ -12,7 +12,8 @@
       "Bash(git *)",
       "Bash(gh *)",
       "Bash(lsof -i :8080)",
-      "Bash(ls -la start.sh app.py .env)"
+      "Bash(ls -la start.sh app.py .env)",
+      "Bash(node verify_settle.js)"
     ]
   }
 }
