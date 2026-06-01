@@ -208,27 +208,36 @@
     .settle-hist-dir-total { font-size: 13px; font-weight: 700; color: #1d1d1f; font-variant-numeric: tabular-nums; }
     .settle-outstanding-layout { display: flex; gap: 16px; align-items: flex-start; }
     .settle-matrix-pane { flex: 1 1 0; min-width: 0; overflow-x: auto; }
-    .settle-detail-pane { width: 30%; min-width: 220px; flex-shrink: 0; position: sticky; top: 72px; max-height: calc(100vh - 100px); overflow-y: auto; }
+    .settle-detail-pane { width: 40%; min-width: 260px; flex-shrink: 0; position: sticky; top: 72px; max-height: calc(100vh - 100px); overflow-y: auto; }
     .settle-detail-card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 14px; padding: 18px 20px; }
     .settle-detail-empty { color: #8e8e93; font-size: 13px; text-align: center; padding: 32px 0; line-height: 1.6; }
-    .settle-detail-dir { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #e0e0e0; }
-    .settle-detail-month { margin-bottom: 18px; }
-    .settle-detail-month-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-    .settle-detail-month-label { font-size: 12px; font-weight: 700; color: #3d3d3f; }
-    .settle-detail-month-right { display: flex; align-items: center; gap: 8px; }
-    .settle-detail-month-total { font-size: 13px; font-weight: 700; color: #1d1d1f; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .settle-detail-tx { display: grid; grid-template-columns: 60px 1fr auto auto; gap: 4px 8px; padding: 5px 0; border-bottom: 1px solid #f0f0f2; align-items: center; }
-    .settle-detail-tx:last-child { border-bottom: none; }
-    .settle-detail-tx-date { font-size: 11px; color: #8e8e93; white-space: nowrap; }
-    .settle-detail-tx-desc { font-size: 12px; color: #1d1d1f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .settle-detail-tx-amt { font-size: 12px; font-weight: 600; color: #1d1d1f; white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+    .settle-detail-dir { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 4px; }
+    .settle-detail-meta { font-size: 12px; color: #6e6e73; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .settle-detail-total { font-size: 14px; font-weight: 700; color: #1d1d1f; font-variant-numeric: tabular-nums; }
+    .settle-detail-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .settle-detail-tbl thead th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #8e8e93; padding: 0 6px 8px; text-align: left; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+    .settle-detail-tbl thead th.amt-col { text-align: right; }
+    .settle-detail-tbl tbody td { padding: 7px 6px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; }
+    .settle-detail-tbl tbody tr.sd-edit-row td { padding: 0 6px 8px; border-bottom: none; }
+    .settle-detail-tbl tbody tr:last-child td { border-bottom: none; }
+    .settle-detail-tbl .td-date { color: #8e8e93; white-space: nowrap; }
+    .settle-detail-tbl .td-desc { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .settle-detail-tbl .td-amt { text-align: right; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .sd-edit-btn { background: none; border: none; cursor: pointer; color: #b0b0b5; font-size: 13px; padding: 0; line-height: 1; }
+    .sd-edit-btn:hover { color: #0071e3; }
+    .sd-edit-form { background: #efefef; border-radius: 8px; padding: 10px; display: none; }
+    .sd-edit-form.open { display: block; }
+    .sd-edit-form label { font-size: 10px; font-weight: 600; color: #6e6e73; display: block; margin-bottom: 2px; }
+    .sd-edit-form input, .sd-edit-form select { width: 100%; box-sizing: border-box; border: 1px solid #d0d0d5; border-radius: 6px; padding: 5px 7px; font-size: 12px; margin-bottom: 6px; }
+    .settle-matrix-cell-selected { background: #dbeafe !important; }
     .settle-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
     .settle-matrix thead th { padding: 10px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6e6e73; text-align: left; border-bottom: 2px solid #e0e0e0; white-space: nowrap; background: #fff; }
     .settle-matrix-dir-col { min-width: 190px; }
     .settle-matrix-month-col { min-width: 140px; }
-    .settle-matrix tbody tr.settle-matrix-row td { padding: 12px 16px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; background: #fff; transition: background .1s; cursor: pointer; }
+    .settle-matrix tbody tr.settle-matrix-row td { padding: 12px 16px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; background: #fff; transition: background .1s; }
     .settle-matrix tbody tr.settle-matrix-row:hover td { background: #f5f5f7; }
-    .settle-matrix tbody tr.settle-matrix-row.selected td { background: #e8f0fe; }
+    .settle-matrix-cell { cursor: pointer; }
+    .settle-matrix-cell:hover { background: #f0f4ff !important; }
     .settle-matrix-dir-label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
     .settle-matrix-owes { color: #8e8e93; font-weight: 400; font-size: 12px; }
     .settle-matrix-empty { color: #c8c8cc; text-align: center; font-size: 15px; }
@@ -1588,12 +1597,12 @@ async function loadSettlements() {
           const total = txs.reduce((s, r) => s + r.amount, 0);
           if (total <= 0) return '<td class="settle-matrix-empty">—</td>';
           const ids = txs.map(r => r.id);
-          return `<td class="settle-matrix-cell">
+          return `<td class="settle-matrix-cell" style="cursor:pointer" onclick="showSettleDetail('${dir}','${m}')">
             <div class="settle-cell-amount">${fmtAmount(total)}</div>
             <button class="btn btn-sm settle-cell-btn" onclick='event.stopPropagation();openSettleModal(${JSON.stringify(ids)},"${fromPerson}","${toPerson}","${m}",${total})'>Settle</button>
           </td>`;
         }).join('');
-        return `<tr class="settle-matrix-row" id="${safeId}" onclick="showSettleDetail('${dir}')">
+        return `<tr class="settle-matrix-row" id="${safeId}">
             <td><div class="settle-matrix-dir-label">${ownerBadge(fromPerson)} <span class="settle-matrix-owes">owes</span> ${ownerBadge(toPerson)}</div></td>
             ${cells}
           </tr>`;
@@ -1665,42 +1674,87 @@ async function loadSettlements() {
   }).join('');
 }
 
-function showSettleDetail(dir) {
+function showSettleDetail(dir, month) {
   const pane = document.getElementById('settle-detail-pane');
   if (!pane) return;
-  document.querySelectorAll('.settle-matrix-row').forEach(r => r.classList.remove('selected'));
+  // Highlight the clicked cell, clear others
+  document.querySelectorAll('.settle-matrix-cell-selected').forEach(el => el.classList.remove('settle-matrix-cell-selected'));
   const safeId = 'sdir-' + dir.replace('→', '-');
   const row = document.getElementById(safeId);
-  if (row) row.classList.add('selected');
+  if (row) {
+    const monthIdx = _settleMonths.indexOf(month);
+    if (monthIdx >= 0) {
+      const cells = row.querySelectorAll('td');
+      if (cells[monthIdx + 1]) cells[monthIdx + 1].classList.add('settle-matrix-cell-selected');
+    }
+  }
+  const txs = (_settleByMonth[month] && _settleByMonth[month][dir]) || [];
   const [fromPerson, toPerson] = dir.split('→');
-  const monthGroups = _settleMonths.map(m => {
-    const txs = _settleByMonth[m] && _settleByMonth[m][dir];
-    if (!txs || !txs.length) return '';
-    const total = txs.reduce((s, r) => s + r.amount, 0);
-    if (total <= 0) return '';
-    const ids  = txs.map(r => r.id);
-    const label = new Date(m + '-15').toLocaleString('en', {month:'long', year:'numeric'});
-    const txRows = txs.map(r => `<div class="settle-detail-tx">
-      <div class="settle-detail-tx-date">${fmtDate(r.date_parsed)}</div>
-      <div class="settle-detail-tx-desc">${esc(r.description||'—')}</div>
-      <div class="settle-detail-tx-cat">${catBadge(r.category)}</div>
-      <div class="settle-detail-tx-amt">${fmtAmount(r.amount)}</div>
-    </div>`).join('');
-    return `<div class="settle-detail-month">
-      <div class="settle-detail-month-header">
-        <span class="settle-detail-month-label">${label}</span>
-        <div class="settle-detail-month-right">
-          <span class="settle-detail-month-total">${fmtAmount(total)}</span>
-          <button class="btn btn-sm settle-cell-btn" onclick='openSettleModal(${JSON.stringify(ids)},"${fromPerson}","${toPerson}","${m}",${total})'>Settle</button>
-        </div>
-      </div>
-      <div class="settle-detail-txs">${txRows}</div>
-    </div>`;
-  }).filter(Boolean).join('');
+  const total = txs.reduce((s, r) => s + r.amount, 0);
+  const ids   = txs.map(r => r.id);
+  const monthLabel = new Date(month + '-15').toLocaleString('en', {month:'long', year:'numeric'});
+  const catOptions = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+  const txRows = txs.map(r => {
+    const safeDesc = (r.description || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const selCat = catOptions.replace(`value="${r.category}"`, `value="${r.category}" selected`);
+    return `<tr id="sdr-${r.id}">
+        <td class="td-date">${fmtDate(r.date_parsed)}</td>
+        <td class="td-desc" title="${safeDesc}">${esc(r.description||'—')}</td>
+        <td>${catBadge(r.category)}</td>
+        <td class="td-amt">${fmtAmount(r.amount)}</td>
+        <td><button class="sd-edit-btn" title="Edit" onclick="toggleSdEdit(${r.id})">✎</button></td>
+      </tr>
+      <tr class="sd-edit-row">
+        <td colspan="5">
+          <div class="sd-edit-form" id="sdf-${r.id}">
+            <label>Description</label>
+            <input id="sdf-desc-${r.id}" value="${safeDesc}">
+            <label>Amount (IDR)</label>
+            <input id="sdf-amt-${r.id}" type="number" value="${Math.round(r.amount)}">
+            <label>Category</label>
+            <select id="sdf-cat-${r.id}">${selCat}</select>
+            <div class="sd-edit-actions">
+              <button class="bp-cancel-btn" onclick="toggleSdEdit(${r.id})">Cancel</button>
+              <button class="bp-save-btn" onclick="saveSdEdit(${r.id},'${dir}','${month}')">Save</button>
+            </div>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
   pane.innerHTML = `<div class="settle-detail-card">
     <div class="settle-detail-dir">${ownerBadge(fromPerson)} <span class="settle-matrix-owes">owes</span> ${ownerBadge(toPerson)}</div>
-    ${monthGroups || '<div class="settle-detail-empty">No transactions</div>'}
+    <div class="settle-detail-meta">
+      <span>${monthLabel}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="settle-detail-total">${fmtAmount(total)}</span>
+        <button class="btn btn-sm settle-cell-btn" onclick='openSettleModal(${JSON.stringify(ids)},"${fromPerson}","${toPerson}","${month}",${total})'>Settle</button>
+      </div>
+    </div>
+    ${txs.length ? `<table class="settle-detail-tbl">
+      <thead><tr>
+        <th>Date</th><th>Description</th><th>Category</th><th class="amt-col">Amount</th><th></th>
+      </tr></thead>
+      <tbody>${txRows}</tbody>
+    </table>` : '<div style="color:#8e8e93;font-size:13px;padding:8px 0">No transactions</div>'}
   </div>`;
+}
+
+function toggleSdEdit(id) {
+  document.getElementById(`sdf-${id}`).classList.toggle('open');
+}
+
+async function saveSdEdit(id, dir, month) {
+  const desc = document.getElementById(`sdf-desc-${id}`).value.trim();
+  const amt  = parseFloat(document.getElementById(`sdf-amt-${id}`).value);
+  const cat  = document.getElementById(`sdf-cat-${id}`).value;
+  if (!desc || isNaN(amt) || amt <= 0) return;
+  await fetch(`/api/transactions/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description: desc, amount: amt, category: cat }),
+  });
+  await loadSettlements();
+  showSettleDetail(dir, month);
 }
 
 // ── ACCOUNTS ──
