@@ -49,6 +49,7 @@ Four Python files + one HTML file. No build step.
 - `update_account(acc_id, fields)` — allowed fields defined by `_ALLOWED_ACCOUNT_FIELDS` frozenset
 - `update_staged(tx_id, fields)` — allowed fields defined by `_ALLOWED_STAGED_FIELDS` frozenset
 - `bulk_settle_transactions(ids, settled_date)` — marks a list of transaction IDs as `settled=1` with the given date in one query
+- `get_setting(key)` / `set_setting(key, value)` — generic key-value store (`settings` table); the household monthly budget lives under key `monthly_budget`
 - `get_settlements()` — returns transactions where `ideal_paid_by IS NOT NULL AND ideal_paid_by != paid_by` (Ideal Source ≠ Actual Source); **not** `paid_by != account_owner`
 
 The three `_ALLOWED_*` frozensets at module level are the authoritative whitelist for which columns each update function may touch. Never use f-string SQL outside these functions.
@@ -69,16 +70,17 @@ The three `_ALLOWED_*` frozensets at module level are the authoritative whitelis
 - Duplicate detection runs before staging; returns `{duplicate:true}` with in-memory transactions so frontend can confirm
 - All write endpoints that accept `category` validate it against the `CATEGORIES` list before calling db functions
 
-**`templates/index.html`** — single-file SPA (~2350 lines). Vanilla JS + Chart.js (CDN). Six views via `navigate(view)`. Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `pendingUploadId`, `pendingDuplicate`, `dashOwner`, `dashMonth`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`.
+**`templates/index.html`** — single-file SPA (~2700 lines). Vanilla JS + Chart.js (CDN). Six views via `navigate(view)`. Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `selectedStagedIds` (Set), `_reviewCtx`, `pendingUploadId`, `pendingDuplicate`, `dashOwner`, `_dashData`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`.
 
 ## Data Model
 
-Four tables in `data/finance.db` (gitignored):
+Five tables in `data/finance.db` (gitignored):
 
 - **`accounts`** — seeded from `SEED_ACCOUNTS` (6 accounts: 3 credit, 1 debit, 2 cash); also manageable via UI CRUD. `owner` ∈ {SHAN, JANICE, JOINT}; `account_type` ∈ {credit, debit, cash}
 - **`uploads`** — one row per statement; `statement_month` (YYYY-MM) derived from `statement_date` (billing date in **original PDF format**, not ISO); survives confirm, deleted on discard
 - **`staged_transactions`** — pure buffer; holds extracted rows pending review; cleared entirely on every confirm or discard; `transaction_type` ∈ {DB, CR} (CR rows shown for context in debit review but never confirmed)
 - **`transactions`** — confirmed rows only; never contains staged or CR data; all downstream views read only this table. `upload_id` is NULL for manually-added transactions.
+- **`settings`** — generic key-value store; currently holds `monthly_budget` (household-level IDR integer as text; absence = no target set)
 
 ## Upload & Staging Flow
 
@@ -154,7 +156,8 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 | POST | `/api/transactions` | Manual entry: direct insert, no upload_id |
 | PATCH | `/api/transactions/<id>` | Update any allowed field (see `_ALLOWED_TX_FIELDS` in db.py) |
 | DELETE | `/api/transactions/<id>` | Delete a confirmed transaction |
-| GET | `/api/dashboard` | Trend + summary scoped to months with actual data; `owner` filter applies to `t.ideal_paid_by`, not `a.owner` |
+| GET | `/api/dashboard` | Trend + summary scoped to months with actual data; `owner` filter applies to `t.ideal_paid_by`, not `a.owner`; also returns `budget` (null when unset) and household-scoped `household_latest_month`/`household_latest_total` for the budget card |
+| PUT | `/api/budget` | Set household monthly target: `{amount: <positive int>}`; 400 otherwise; stored via `set_setting('monthly_budget', …)` |
 | GET | `/api/settlements` | Transactions where `ideal_paid_by IS NOT NULL AND ideal_paid_by != paid_by` |
 | POST | `/api/settlements/settle` | Bulk-settle a list of transaction IDs: `{ids: [...], settled_date: "YYYY-MM-DD"}` |
 | GET | `/api/statements` | Uploads grouped by account; includes staged_count for pending-review detection |
@@ -172,6 +175,7 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 - `allAccounts` is refreshed from the API every time `loadAccounts()` runs — the Add Transaction modal always reflects the current account list
 - Dashboard `owner` tab filters by `t.ideal_paid_by` (Ideal Source), **not** by `a.owner` (account ownership) — this applies to both the trend chart (`get_dashboard_data` in `db.py`) and the category breakdown panel (`loadBreakdown` in `index.html`, which passes `ideal_paid_by=` to `/api/transactions`)
 - Dashboard breakdown panel: `loadBreakdown(month, category)` fetches transactions and renders per-item bars + Actual Source badge; `toggleBpEdit(id)` / `saveBpEdit(id, month, origCategory)` handle inline editing that PATCHes directly to `/api/transactions/<id>`
+- Dashboard summary cards (no month pills): `renderDeltaCard` (latest data month total + MoM delta, respects owner tab) and `renderBudgetCard` (budget vs actual with mid-month pace tick; **household-only — ignores the owner tab**, shows a `Household` caption on non-ALL tabs); inline target editing via `toggleBudgetEdit`/`saveBudget` → `PUT /api/budget`
 - Settlements detail pane: `showSettleDetail(dir, month)` renders cell-level transactions in the right panel; `toggleSdEdit(id)` / `saveSdEdit(id, dir, month)` provide the same inline-edit pattern scoped to the settlements context
 - Chart totals: `stackTotalsPlugin` (defined inline in `renderTrend`) draws the month total above each stacked bar using Chart.js `afterDatasetsDraw`
 

@@ -102,7 +102,7 @@
     .owner-tab[data-owner="JOINT"].active  { background: var(--owner-joint); border-color: var(--owner-joint); color: #fff; }
 
     /* ── DASHBOARD ── */
-    .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 28px; max-width: 880px; }
     .summary-card { border-radius: var(--r-md); padding: 16px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow-sm); }
     .summary-card.total { background: var(--header-bg); color: var(--header-ink); border-color: var(--header-bg); }
     .summary-card .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); margin-bottom: 6px; }
@@ -110,6 +110,24 @@
     .summary-card .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .summary-card .sub { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
     .summary-card.total .sub { color: rgba(246,245,241,.5); }
+    .summary-card .delta { font-size: 12px; font-weight: 600; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    .delta-up { color: var(--danger); }
+    .delta-down { color: var(--success); }
+    .delta-flat { color: var(--ink-3); }
+    /* readable tints on the dark total card */
+    .summary-card.total .delta-up { color: #F2A48F; }
+    .summary-card.total .delta-down { color: #8FD7B5; }
+    .summary-card.total .delta-flat { color: rgba(246,245,241,.5); }
+    .budget-scope { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--ink-3); margin-left: 6px; font-size: 11px; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 8px; }
+    .budget-edit-btn { background: none; border: none; cursor: pointer; color: var(--ink-3); font-size: 12px; padding: 2px 4px; float: right; transition: color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
+    .budget-edit-btn:active { transform: scale(0.96); }
+    .budget-of { font-size: 12px; font-weight: 500; color: var(--ink-3); }
+    .budget-bar { position: relative; height: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); margin-top: 10px; overflow: hidden; }
+    .budget-fill { height: 100%; background: var(--accent); border-radius: var(--r-pill); transition: width var(--dur-base) var(--ease-out); }
+    .budget-fill.over { background: var(--danger); }
+    .pace-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink-2); }
+    .budget-edit-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+    .budget-edit-row input { flex: 1; min-width: 0; }
     .dash-chart-row { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 28px; }
     .chart-wrap { background: var(--surface); border-radius: var(--r-lg); border: 1px solid var(--line); padding: 24px; flex: 0 0 65%; min-width: 0; box-shadow: var(--shadow-sm); }
     .breakdown-panel { flex: 0 0 calc(35% - 16px); background: var(--surface); border-radius: var(--r-lg); border: 1px solid var(--line); padding: 20px; min-width: 0; min-height: 200px; box-shadow: var(--shadow-sm); }
@@ -531,7 +549,6 @@
       <div class="owner-tab" data-owner="JANICE">JANICE</div>
       <div class="owner-tab" data-owner="JOINT">JOINT</div>
     </div>
-    <div class="month-pills" id="dash-months"></div>
     <div class="summary-grid" id="dash-summary"></div>
     <div class="dash-chart-row">
       <div class="chart-wrap">
@@ -912,7 +929,7 @@ const CAT_COLORS = {
 let allAccounts = [];
 let trendChart = null;
 let dashOwner = 'ALL';
-let dashMonth = null;
+let _dashData = null;
 let txSortKey = 'date_parsed';
 let txSortDir = -1;
 let txRows = [];
@@ -1029,55 +1046,106 @@ document.querySelectorAll('#dash-owner-tabs .owner-tab').forEach(tab => {
 
 async function loadDashboard() {
   const data = await api(`/api/dashboard?owner=${dashOwner}&months=6`);
-  const months = data.trend.map(t => t.month);
-
-  // Build month pills
-  const pillsEl = document.getElementById('dash-months');
-  pillsEl.innerHTML = months.map(m =>
-    `<div class="month-pill ${m === (dashMonth || months[months.length-1]) ? 'active' : ''}" data-month="${m}" onclick="selectDashMonth('${m}')">${fmtMonth(m)}</div>`
-  ).join('');
-
-  if (!dashMonth) dashMonth = months[months.length - 1];
-  renderSummary(data.summary, data.trend);
+  _dashData = data;
+  renderSummary(data);
   renderTrend(data.trend);
 }
 
-function selectDashMonth(m) {
-  dashMonth = m;
-  document.querySelectorAll('.month-pill').forEach(p => p.classList.toggle('active', p.dataset.month === m));
-  api(`/api/dashboard?owner=${dashOwner}&months=6`).then(data => {
-    const monthData = data.trend.find(t => t.month === m) || {month: m, categories: {}};
-    const cats = monthData.categories;
-    const total = Object.values(cats).reduce((s, v) => s + v, 0);
-    const topCats = Object.entries(cats).sort((a,b) => b[1]-a[1]).slice(0,3).map(([c,v]) => ({category:c,total:v}));
-    // find biggest from all transactions for that month
-    renderSummary({month: m, total, tx_count: null, biggest: null, top_categories: topCats}, data.trend);
-  });
+function renderSummary(data) {
+  const el = document.getElementById('dash-summary');
+  el.innerHTML = renderDeltaCard(data) + renderBudgetCard(data);
 }
 
-function renderSummary(summary) {
-  const el = document.getElementById('dash-summary');
-  const topCats = (summary.top_categories || []).map(c =>
-    `<div class="card-sm">
-      <div class="label">${c.category}</div>
-      <div class="value" style="font-size:18px;">${fmtAmount(c.total)}</div>
-    </div>`
-  ).join('');
-
-  el.innerHTML = `
+function renderDeltaCard(data) {
+  const trend = data.trend || [];
+  const cur = trend[trend.length - 1];
+  if (!cur) return '';
+  const total = data.summary.total || 0;
+  let deltaHtml = '';
+  if (trend.length > 1) {
+    const prev = trend[trend.length - 2];
+    const prevTotal = Object.values(prev.categories).reduce((s, v) => s + v, 0);
+    const diff = total - prevTotal;
+    if (diff === 0) {
+      deltaHtml = `<div class="delta delta-flat">No change vs ${fmtMonth(prev.month)}</div>`;
+    } else {
+      const up = diff > 0;
+      const pctTxt = prevTotal > 0 ? ` (${up ? '+' : '−'}${Math.round(Math.abs(diff) / prevTotal * 100)}%)` : '';
+      deltaHtml = `<div class="delta ${up ? 'delta-up' : 'delta-down'}">${up ? '▲' : '▼'} ${fmtAmount(Math.abs(diff))}${pctTxt} vs ${fmtMonth(prev.month)}</div>`;
+    }
+  }
+  return `
     <div class="summary-card total">
-      <div class="label">${fmtMonth(summary.month)} · Total</div>
-      <div class="value">${fmtAmount(summary.total)}</div>
-      <div class="sub">${summary.tx_count != null ? summary.tx_count + ' transactions' : ''}</div>
-    </div>
-    ${summary.biggest ? `
-    <div class="summary-card">
-      <div class="label">Biggest purchase</div>
-      <div class="value" style="font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${summary.biggest.description}">${summary.biggest.description}</div>
-      <div class="sub">${fmtAmount(summary.biggest.amount)}</div>
-    </div>` : ''}
-    ${topCats}
-  `;
+      <div class="label">${fmtMonth(data.summary.month)} · Total</div>
+      <div class="value">${fmtAmount(total)}</div>
+      <div class="sub">${data.summary.tx_count != null ? data.summary.tx_count + ' transactions' : ''}</div>
+      ${deltaHtml}
+    </div>`;
+}
+
+function renderBudgetCard(data) {
+  const budget = data.budget;
+  const caption = dashOwner !== 'ALL' ? '<span class="budget-scope">Household</span>' : '';
+  if (budget == null) {
+    return `
+      <div class="summary-card" id="budget-card">
+        <div class="label">Monthly target ${caption}</div>
+        <div style="margin-top:10px;">
+          <button class="btn btn-outline btn-sm" onclick="toggleBudgetEdit()">Set monthly target</button>
+        </div>
+      </div>`;
+  }
+  const spent = data.household_latest_total || 0;
+  const now = new Date();
+  const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const inProgress = data.household_latest_month === curMonth;
+  const fillPct = Math.min(100, spent / budget * 100);
+  const over = spent >= budget;
+  let paceTick = '';
+  if (inProgress) {
+    const daysIn = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    paceTick = `<div class="pace-tick" style="left:${(now.getDate() / daysIn * 100).toFixed(1)}%" title="Linear pace today"></div>`;
+  }
+  const status = over
+    ? `<div class="sub" style="color:var(--danger);font-weight:600;">Over by ${fmtAmount(spent - budget)}</div>`
+    : `<div class="sub">${fmtAmount(budget - spent)} remaining</div>`;
+  return `
+    <div class="summary-card" id="budget-card">
+      <div class="label">Monthly target ${caption}
+        <button class="budget-edit-btn" onclick="toggleBudgetEdit()" title="Edit target">✎</button>
+      </div>
+      <div class="value" style="font-size:18px;">${fmtAmount(spent)} <span class="budget-of">${inProgress ? 'spent so far' : 'spent'} of ${fmtAmount(budget)}</span></div>
+      <div class="budget-bar">
+        <div class="budget-fill ${over ? 'over' : ''}" style="width:${fillPct.toFixed(1)}%"></div>
+        ${paceTick}
+      </div>
+      ${status}
+    </div>`;
+}
+
+function toggleBudgetEdit() {
+  const card = document.getElementById('budget-card');
+  if (!card || !_dashData) return;
+  const cur = _dashData.budget != null ? _dashData.budget : '';
+  card.innerHTML = `
+    <div class="label">Monthly target</div>
+    <div class="budget-edit-row">
+      <input type="number" id="budget-input" class="review-num-input" value="${cur}" min="1" step="1" placeholder="e.g. 15000000"
+             oninput="document.getElementById('budget-save-btn').disabled = !(parseInt(this.value,10) > 0)"
+             onkeydown="if(event.key==='Enter')saveBudget();if(event.key==='Escape')renderSummary(_dashData)">
+      <button class="btn btn-sm" id="budget-save-btn" onclick="saveBudget()" ${cur > 0 ? '' : 'disabled'}>Save</button>
+      <button class="btn btn-outline btn-sm" onclick="renderSummary(_dashData)">Cancel</button>
+    </div>`;
+  document.getElementById('budget-input').focus();
+}
+
+async function saveBudget() {
+  const val = parseInt(document.getElementById('budget-input').value, 10);
+  if (!(val > 0)) return;
+  const res = await fetch('/api/budget', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({amount: val})});
+  if (!res.ok) return;
+  _dashData.budget = val;
+  renderSummary(_dashData);
 }
 
 function renderTrend(trend) {

@@ -203,3 +203,40 @@ class TestCategoryValidation:
                            content_type='application/json')
         assert resp.status_code == 400
         assert 'Invalid category' in resp.get_json()['error']
+
+
+class TestSettings:
+    def test_get_missing_setting_returns_none(self, fresh_db):
+        assert db.get_setting('monthly_budget') is None
+
+    def test_set_and_get_setting(self, fresh_db):
+        db.set_setting('monthly_budget', '15000000')
+        assert db.get_setting('monthly_budget') == '15000000'
+
+    def test_set_setting_overwrites(self, fresh_db):
+        db.set_setting('monthly_budget', '15000000')
+        db.set_setting('monthly_budget', '20000000')
+        assert db.get_setting('monthly_budget') == '20000000'
+
+
+class TestBudgetApi:
+    def test_dashboard_budget_null_when_unset(self, client):
+        data = client.get('/api/dashboard').get_json()
+        assert data['budget'] is None
+        assert 'household_latest_total' in data
+        assert 'household_latest_month' in data
+
+    def test_put_budget_persists_to_dashboard(self, client):
+        resp = client.put('/api/budget', json={'amount': 15000000},
+                          content_type='application/json')
+        assert resp.status_code == 200
+        assert resp.get_json()['budget'] == 15000000
+        data = client.get('/api/dashboard').get_json()
+        assert data['budget'] == 15000000
+
+    def test_put_budget_rejects_invalid_amounts(self, client):
+        for payload in [{}, {'amount': 0}, {'amount': -5}, {'amount': 'abc'},
+                        {'amount': 1.5}, {'amount': True}]:
+            resp = client.put('/api/budget', json=payload,
+                              content_type='application/json')
+            assert resp.status_code == 400, f'payload {payload} should be rejected'

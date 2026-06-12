@@ -15,7 +15,7 @@ from db import (init_db, get_accounts, create_account, update_account, delete_ac
                 get_transactions, get_transactions_by_ids, update_transaction, delete_transaction,
                 create_transaction, get_staged, update_staged, delete_staged_tx, confirm_upload,
                 discard_upload, get_dashboard_data, get_settlements, bulk_settle_transactions,
-                get_statements, parse_date, _dominant_month)
+                get_statements, parse_date, _dominant_month, get_setting, set_setting)
 from rules import apply_rules, build_rules_prompt, build_bank_notes
 
 load_dotenv()
@@ -322,10 +322,23 @@ def api_delete_tx(tx_id):
 
 @app.route('/api/dashboard')
 def api_dashboard():
-    return jsonify(get_dashboard_data(
+    data = get_dashboard_data(
         owner=request.args.get('owner'),
         months=int(request.args.get('months', 6)),
-    ))
+    )
+    budget = get_setting('monthly_budget')
+    data['budget'] = int(budget) if budget is not None else None
+    return jsonify(data)
+
+
+@app.route('/api/budget', methods=['PUT'])
+def api_set_budget():
+    data = request.get_json(silent=True) or {}
+    amount = data.get('amount')
+    if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0:
+        return jsonify({'error': 'amount must be a positive integer'}), 400
+    set_setting('monthly_budget', str(amount))
+    return jsonify({'budget': amount})
 
 
 @app.route('/api/settlements')

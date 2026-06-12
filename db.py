@@ -106,6 +106,10 @@ def init_db():
             original_currency TEXT,
             original_amount  REAL
         );
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
     ''')
     for _col_sql in [
         "ALTER TABLE uploads ADD COLUMN statement_date TEXT",
@@ -352,6 +356,24 @@ def delete_transaction(tx_id):
     conn.close()
 
 
+def get_setting(key):
+    conn = get_db()
+    row = conn.execute('SELECT value FROM settings WHERE key=?', (key,)).fetchone()
+    conn.close()
+    return row['value'] if row else None
+
+
+def set_setting(key, value):
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO settings (key, value) VALUES (?, ?) '
+        'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+        (key, str(value)),
+    )
+    conn.commit()
+    conn.close()
+
+
 def get_dashboard_data(owner=None, months=6):
     conn = get_db()
 
@@ -399,12 +421,14 @@ def get_dashboard_data(owner=None, months=6):
         GROUP BY t.category ORDER BY total DESC
     ''', [summary_month] + op).fetchall()
 
-    biggest = conn.execute(f'''
-        SELECT description, amount
-        FROM transactions t JOIN accounts a ON a.id=t.account_id
-        WHERE t.is_real_expense=1 AND t.amount>0 AND substr(t.date_parsed,1,7)=? {of}
-        ORDER BY t.amount DESC LIMIT 1
-    ''', [summary_month] + op).fetchone()
+    # Household (unfiltered) latest data month — consumed by the budget card,
+    # which is household-scoped regardless of the active owner filter
+    household = conn.execute('''
+        SELECT substr(t.date_parsed,1,7) AS month, SUM(t.amount) AS total
+        FROM transactions t
+        WHERE t.is_real_expense=1 AND t.amount>0 AND t.date_parsed IS NOT NULL
+        GROUP BY month ORDER BY month DESC LIMIT 1
+    ''').fetchone()
 
     conn.close()
     return {
@@ -413,9 +437,9 @@ def get_dashboard_data(owner=None, months=6):
             'month': summary_month,
             'total': sum(r['total'] for r in cat_rows),
             'tx_count': sum(r['cnt'] for r in cat_rows),
-            'biggest': dict(biggest) if biggest else None,
-            'top_categories': [{'category': r['category'], 'total': r['total']} for r in cat_rows[:3]],
         },
+        'household_latest_month': household['month'] if household else None,
+        'household_latest_total': household['total'] if household else 0,
     }
 
 def get_settlements():
