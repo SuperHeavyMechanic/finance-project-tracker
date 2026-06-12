@@ -422,6 +422,8 @@
        keyframes) so rapid select/deselect retargets smoothly; exit faster. */
     .action-bar { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(12px); background: var(--header-bg); color: #fff; padding: 10px 18px; border-radius: var(--r-pill); display: flex; align-items: center; gap: 10px; z-index: 500; box-shadow: 0 12px 32px rgba(32,30,26,.32); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
     .action-bar.visible { opacity: 1; transform: translateX(-50%); pointer-events: auto; transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+    .action-bar.review-layer { z-index: 800; }
+    tr.staged-selected td { background: var(--accent-soft) !important; }
     .abar-count { font-size: 13px; font-weight: 600; padding-right: 10px; border-right: 1px solid rgba(255,255,255,.2); }
     .abar-btn { background: rgba(255,255,255,.12); border: none; color: #fff; padding: 6px 14px; border-radius: var(--r-pill); font-size: 12px; font-weight: 500; cursor: pointer; transition: background-color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
     .abar-btn:active { transform: scale(0.96); }
@@ -738,6 +740,24 @@
   <button class="abar-btn" onclick="clearSelection()">✕ Clear</button>
 </div>
 
+<!-- ── REVIEW BULK ACTION BAR ── -->
+<div class="action-bar review-layer" id="staged-action-bar">
+  <span class="abar-count" id="sbar-count">0 selected</span>
+  <select class="abar-select" id="sbar-cat" onchange="bulkStagedCategory(this.value)">
+    <option value="">Reassign category…</option>
+  </select>
+  <div class="abar-sep"></div>
+  <select class="abar-select" id="sbar-ideal-pb" onchange="bulkStagedIdealPaidBy(this.value)">
+    <option value="">Ideal Source…</option>
+    <option value="SHAN">SHAN</option><option value="JANICE">JANICE</option><option value="JOINT">JOINT</option>
+    <option value="__clear__">— Clear —</option>
+  </select>
+  <div class="abar-sep"></div>
+  <button class="abar-btn danger" onclick="bulkStagedDelete()">Remove</button>
+  <div class="abar-sep"></div>
+  <button class="abar-btn" onclick="clearStagedSelection()">✕ Clear</button>
+</div>
+
 <!-- ── ADD TRANSACTION MODAL ── -->
 <div class="modal-overlay" id="add-tx-modal" onclick="if(event.target===this)closeAddTxModal()">
   <div class="modal" style="max-width:520px">
@@ -897,6 +917,8 @@ let txSortKey = 'date_parsed';
 let txSortDir = -1;
 let txRows = [];
 let selectedTxIds = new Set();
+let selectedStagedIds = new Set();
+let _reviewCtx = null;
 let pendingDuplicate = null;
 let pendingUploadId = null;
 
@@ -2148,6 +2170,12 @@ async function openReviewModal(uploadId) {
   const dbRows = rows.filter(r => r.transaction_type === 'DB');
   const crRows = rows.filter(r => r.transaction_type === 'CR');
 
+  _reviewCtx = { uploadId, dbRows, crRows, accountType };
+  selectedStagedIds.clear();
+  updateStagedBar();
+  document.getElementById('sbar-cat').innerHTML = '<option value="">Reassign category…</option>' +
+    CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+
   document.getElementById('review-title').textContent = `Review: ${accName}`;
   document.getElementById('review-sub').textContent = `${rows.length} transactions staged · ${fmtMonth(stmtMonth)}`;
   document.getElementById('review-discard-btn').onclick = () => discardReview(uploadId);
@@ -2197,8 +2225,13 @@ function renderReviewContent(dbRows, crRows, accountType) {
 
 function renderStagedTable(rows) {
   if (!rows.length) return '<div class="no-data" style="padding:24px;">No transactions.</div>';
+  const allSel = rows.length > 0 && rows.every(r => selectedStagedIds.has(r.id));
   return `<table class="review-tbl">
     <thead><tr>
+      <th style="width:36px;text-align:center">
+        <input type="checkbox" class="inline-check" id="staged-chk-all" ${allSel?'checked':''}
+               onchange="toggleAllStaged(this.checked)">
+      </th>
       <th style="width:90px">Date</th>
       <th style="width:160px">Category</th>
       <th>Description</th>
@@ -2216,7 +2249,12 @@ function renderStagedTable(rows) {
 function renderStagedRow(r) {
   const catOpts = CATEGORIES.map(c => `<option value="${c}" ${c===r.category?'selected':''}>${c}</option>`).join('');
   const catCls = CAT_CLASS[r.category] || 'cat-OTHERS';
-  return `<tr id="staged-row-${r.id}">
+  const isSel = selectedStagedIds.has(r.id);
+  return `<tr id="staged-row-${r.id}" class="${isSel?'staged-selected':''}">
+    <td style="text-align:center;">
+      <input type="checkbox" class="inline-check staged-chk" data-id="${r.id}" ${isSel?'checked':''}
+             onchange="toggleStagedSel(${r.id},this.checked)">
+    </td>
     <td style="white-space:nowrap;color:var(--ink-2);">${fmtDate(r.date_parsed)}</td>
     <td>
       <select class="inline-select cat-badge ${catCls}"
@@ -2282,6 +2320,80 @@ async function deleteStagedRow(txId) {
   await fetch(`/api/staged/${txId}`, {method: 'DELETE'});
   const row = document.getElementById(`staged-row-${txId}`);
   if (row) row.remove();
+  selectedStagedIds.delete(txId);
+  if (_reviewCtx) _reviewCtx.dbRows = _reviewCtx.dbRows.filter(r => r.id !== txId);
+  updateStagedBar();
+}
+
+// ── REVIEW BULK SELECTION ──
+function toggleStagedSel(id, checked) {
+  if (checked) selectedStagedIds.add(id);
+  else selectedStagedIds.delete(id);
+  const row = document.getElementById(`staged-row-${id}`);
+  if (row) row.classList.toggle('staged-selected', checked);
+  const chkAll = document.getElementById('staged-chk-all');
+  if (chkAll && _reviewCtx) chkAll.checked = _reviewCtx.dbRows.length > 0 && _reviewCtx.dbRows.every(r => selectedStagedIds.has(r.id));
+  updateStagedBar();
+}
+
+function toggleAllStaged(checked) {
+  if (!_reviewCtx) return;
+  _reviewCtx.dbRows.forEach(r => { if (checked) selectedStagedIds.add(r.id); else selectedStagedIds.delete(r.id); });
+  renderReviewContent(_reviewCtx.dbRows, _reviewCtx.crRows, _reviewCtx.accountType);
+  updateStagedBar();
+}
+
+function updateStagedBar() {
+  const bar = document.getElementById('staged-action-bar');
+  if (!bar) return;
+  const count = selectedStagedIds.size;
+  if (count > 0) {
+    bar.classList.add('visible');
+    document.getElementById('sbar-count').textContent = `${count} selected`;
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+
+function clearStagedSelection() {
+  selectedStagedIds.clear();
+  if (_reviewCtx) renderReviewContent(_reviewCtx.dbRows, _reviewCtx.crRows, _reviewCtx.accountType);
+  updateStagedBar();
+}
+
+async function bulkStagedCategory(cat) {
+  document.getElementById('sbar-cat').value = '';
+  if (!cat || !selectedStagedIds.size || !_reviewCtx) return;
+  const ids = [...selectedStagedIds];
+  await Promise.all(ids.map(id =>
+    fetch(`/api/staged/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({category: cat})})
+  ));
+  _reviewCtx.dbRows.forEach(r => { if (selectedStagedIds.has(r.id)) r.category = cat; });
+  renderReviewContent(_reviewCtx.dbRows, _reviewCtx.crRows, _reviewCtx.accountType);
+}
+
+async function bulkStagedIdealPaidBy(val) {
+  document.getElementById('sbar-ideal-pb').value = '';
+  if (!val || !selectedStagedIds.size || !_reviewCtx) return;
+  const resolved = val === '__clear__' ? null : val;
+  const ids = [...selectedStagedIds];
+  await Promise.all(ids.map(id =>
+    fetch(`/api/staged/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ideal_paid_by: resolved})})
+  ));
+  _reviewCtx.dbRows.forEach(r => { if (selectedStagedIds.has(r.id)) r.ideal_paid_by = resolved; });
+  renderReviewContent(_reviewCtx.dbRows, _reviewCtx.crRows, _reviewCtx.accountType);
+}
+
+async function bulkStagedDelete() {
+  const count = selectedStagedIds.size;
+  if (!count || !_reviewCtx) return;
+  if (!confirm(`Remove ${count} staged transaction${count > 1 ? 's' : ''} from this upload? They will not be added to the tracker.`)) return;
+  const ids = [...selectedStagedIds];
+  await Promise.all(ids.map(id => fetch(`/api/staged/${id}`, {method: 'DELETE'})));
+  _reviewCtx.dbRows = _reviewCtx.dbRows.filter(r => !selectedStagedIds.has(r.id));
+  selectedStagedIds.clear();
+  renderReviewContent(_reviewCtx.dbRows, _reviewCtx.crRows, _reviewCtx.accountType);
+  updateStagedBar();
 }
 
 async function confirmReview(uploadId) {
@@ -2313,6 +2425,9 @@ async function discardReview(uploadId) {
 
 function closeReviewModal() {
   document.getElementById('review-modal').classList.remove('visible');
+  selectedStagedIds.clear();
+  updateStagedBar();
+  _reviewCtx = null;
 }
 
 // ── ACCOUNT CRUD ──
