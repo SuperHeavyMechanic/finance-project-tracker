@@ -13,7 +13,19 @@
       "Bash(gh *)",
       "Bash(lsof -i :8080)",
       "Bash(ls -la start.sh app.py .env)",
-      "Bash(node verify_settle.js)"
+      "Bash(node verify_settle.js)",
+      "Bash(python3 -)",
+      "Bash(node --check /tmp/check.js)",
+      "Bash(curl -s -o /tmp/page.html -w \"HTTP %{http_code}\\\\n\" http://localhost:8080)",
+      "Read(//tmp/**)",
+      "Bash(osacompile -o '/Users/shansebastian/Desktop/Finance Tracker.app' -e 'do shell script quoted form of \"/Users/shansebastian/Claude Code Projects/01-Finance Project Tracker/launch_app.sh\"')",
+      "Bash(echo \"exit: $?\")",
+      "Bash(rm -f Tally.iconset/icon_64x64.png)",
+      "Bash(iconutil -c icns Tally.iconset -o Tally.icns)",
+      "Bash(rm -rf \"/Users/shansebastian/Desktop/Finance Tracker.app\")",
+      "Bash(osacompile -o /Users/shansebastian/Desktop/Tally.app -e 'do shell script quoted form of \"__TRACKED_VAR__\"')",
+      "Bash(open \"/Users/shansebastian/Desktop/Tally.app\")",
+      "Bash(curl -s -o /dev/null -w \"Tally launcher -> HTTP %{http_code}\\\\n\" http://localhost:8080)"
     ]
   }
 }

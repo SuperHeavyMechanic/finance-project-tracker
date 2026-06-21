@@ -11,6 +11,8 @@ python3 app.py   # alternative
 
 Open at **http://localhost:8080**. Port 5000 is avoided (macOS AirPlay conflict).
 
+`launch_app.sh` is a double-click entry point (wrapped as `Tally.app` via `osacompile`, kept outside the repo on the Desktop): checks if port 8080 is already listening before starting `python3 app.py` in the background, then `open`s the browser. Safe to invoke repeatedly — it won't spawn duplicate servers.
+
 Install dependencies:
 ```bash
 pip3 install flask anthropic python-dotenv pypdf pytest
@@ -34,7 +36,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ## Architecture
 
-Four Python files + one HTML file. No build step.
+Four Python files + one HTML file. No build step. `static/` holds the favicon/app-icon
+assets Flask serves at `/static/*` (default Flask static config, no custom wiring in `app.py`).
 
 **`db.py`** — all database logic (SQLite via `sqlite3`). Key functions:
 - `init_db()` — creates tables, runs `ALTER TABLE` migrations, seeds missing accounts from `SEED_ACCOUNTS` (per-account upsert by `bank + last_four`).
@@ -179,13 +182,21 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 - Settlements detail pane: `showSettleDetail(dir, month)` renders cell-level transactions in the right panel; `toggleSdEdit(id)` / `saveSdEdit(id, dir, month)` provide the same inline-edit pattern scoped to the settlements context
 - Chart totals: `stackTotalsPlugin` (defined inline in `renderTrend`) draws the month total above each stacked bar using Chart.js `afterDatasetsDraw`
 
+## Branding
+
+The product-facing name is **Tally** (page `<title>`, header logo, favicon/app icon) —
+distinct from the repo/folder name and the "finance tracker" language used throughout
+this file and the PRDs, which describe the project, not the brand. Icon source files
+(`make_icon.py`, `make_favicons.py`, the 1024px master PNG, `.iconset`/`.icns`) live in
+`branding/` for regenerating assets if the palette or mark changes; the design tokens
+they pull from are documented in `DESIGN-SYSTEM.md`.
+
 ## Agent Team Roles
 
 Reusable agent definitions live in `.claude/agents/`:
 - `ui-designer.md` — reviews and redesigns views in `templates/index.html`; knows existing CSS patterns and component conventions
-- `frontend-specialist.md` — implements FE changes; checks for XSS escaping, DRY violations, debouncing
-- `backend-specialist.md` — implements BE changes; enforces parameterised SQL, category validation, file magic checks, DB indexes
-- `qa-specialist.md` — reviews data integrity and adds tests; always uses `:memory:` DB fixture, never touches `data/finance.db`
+- `design-system.md` — owns `DESIGN-SYSTEM.md` (tokens, components, motion rules) and applies it to `templates/index.html`; grounded in the Emil Kowalski design-engineering skill
+- `product-manager.md` — sharpens feature requests into PRDs via structured discovery; specialises in the Settlement feature and the `paid_by` / `ideal_paid_by` data model
 
 Agent teams are enabled via `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in `.claude/settings.json`.
 

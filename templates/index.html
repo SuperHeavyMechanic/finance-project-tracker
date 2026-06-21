@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Finance Tracker</title>
+  <title>Tally</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
+  <link rel="shortcut icon" href="/static/favicon.ico" />
+  <meta name="theme-color" content="#23211C" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     /* ════════════════════════════════════════════════════════════════
@@ -69,7 +74,8 @@
 
     /* ── NAV ── */
     header { background: var(--header-bg); padding: 0 32px; display: flex; align-items: center; gap: 32px; position: sticky; top: 0; z-index: 100; }
-    .logo { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--header-ink); white-space: nowrap; padding: 16px 0; }
+    .logo { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--header-ink); white-space: nowrap; padding: 16px 0; display: flex; align-items: center; gap: 8px; }
+    .logo svg { flex-shrink: 0; }
     nav { display: flex; gap: 4px; }
     nav a { color: rgba(246,245,241,.55); font-size: 13.5px; font-weight: 500; padding: 20px 14px; cursor: pointer; border-bottom: 2px solid transparent; transition: color var(--dur-fast) ease, border-color var(--dur-fast) ease; text-decoration: none; }
     @media (hover: hover) and (pointer: fine) {
@@ -527,7 +533,14 @@
 <body>
 
 <header>
-  <div class="logo">Finance Tracker</div>
+  <div class="logo">
+    <svg width="19" height="16" viewBox="0 0 38 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="0" y="4" width="10" height="28" rx="3" fill="#57C29C" />
+      <rect x="14" y="12" width="10" height="20" rx="3" fill="#0E7A5F" />
+      <rect x="28" y="20" width="10" height="12" rx="3" fill="#0A6450" />
+    </svg>
+    Tally
+  </div>
   <nav>
     <a class="active" data-view="dashboard">Dashboard</a>
     <a data-view="transactions">Transactions</a>
