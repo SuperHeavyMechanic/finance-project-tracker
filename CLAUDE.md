@@ -40,10 +40,11 @@ Four Python files + one HTML file. No build step. `static/` holds the favicon/ap
 assets Flask serves at `/static/*` (default Flask static config, no custom wiring in `app.py`).
 
 **`db.py`** — all database logic (SQLite via `sqlite3`). Key functions:
-- `init_db()` — creates tables, runs `ALTER TABLE` migrations, seeds missing accounts from `SEED_ACCOUNTS` (per-account upsert by `bank + last_four`).
-- `save_staged(account_id, filename, transactions, statement_date)` — creates the upload record and writes transactions to `staged_transactions`; this is the main upload path
-- `confirm_upload(upload_id)` — inserts only `transaction_type='DB'` staged rows into `transactions`, then deletes all staged rows for that upload
-- `discard_upload(upload_id)` — deletes all staged rows + the upload record entirely
+- `init_db()` — creates tables, runs `ALTER TABLE` migrations, seeds missing accounts from `SEED_ACCOUNTS` (per-account upsert by `bank + last_four`); also sweeps orphaned statement files from `data/statements/`
+- `save_staged(account_id, filename, transactions, statement_date, summary, file_bytes, file_ext)` — creates the upload record and writes transactions to `staged_transactions`; this is the main upload path. `summary` = printed statement figures (generic keys `prev_balance/credits_total/debits_total/new_balance`); `file_bytes`+`file_ext` persist the (decrypted) source document to `data/statements/<upload_id>.<ext>` while the review is pending
+- `confirm_upload(upload_id)` — inserts only `transaction_type='DB'` staged rows into `transactions`, then deletes all staged rows for that upload **and the stored statement file**
+- `discard_upload(upload_id)` — deletes all staged rows + the upload record entirely **and the stored statement file**
+- `get_upload_file(upload_id)` — returns `(path, ext)` for a pending upload's stored document, or None
 - `get_staged(upload_id)` — returns staged rows joined with account info (includes `account_type`)
 - `parse_date(s)` — normalises Indonesian bank date formats (DD/MM/YYYY, DD-Mon-YY, ISO) to YYYY-MM-DD
 - `create_transaction(fields)` — direct insert into `transactions` (manual entry, no upload/staging)
@@ -73,40 +74,54 @@ The three `_ALLOWED_*` frozensets at module level are the authoritative whitelis
 - Duplicate detection runs before staging; returns `{duplicate:true}` with in-memory transactions so frontend can confirm
 - All write endpoints that accept `category` validate it against the `CATEGORIES` list before calling db functions
 
-**`templates/index.html`** — single-file SPA (~2700 lines). Vanilla JS + Chart.js (CDN). Six views via `navigate(view)`. Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `selectedStagedIds` (Set), `_reviewCtx`, `pendingUploadId`, `pendingDuplicate`, `dashOwner`, `_dashData`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`.
+**`templates/index.html`** — single-file SPA (~2800 lines). Vanilla JS + Chart.js (CDN). Five views via `navigate(view)` (Dashboard, Transactions, Settlements, Accounts, Statements — uploading lives in a modal on Statements). Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `selectedStagedIds` (Set), `_reviewCtx`, `pendingUploadId`, `pendingDuplicate`, `dashOwner`, `_dashData`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`.
 
 ## Data Model
 
 Five tables in `data/finance.db` (gitignored):
 
 - **`accounts`** — seeded from `SEED_ACCOUNTS` (6 accounts: 3 credit, 1 debit, 2 cash); also manageable via UI CRUD. `owner` ∈ {SHAN, JANICE, JOINT}; `account_type` ∈ {credit, debit, cash}
-- **`uploads`** — one row per statement; `statement_month` (YYYY-MM) derived from `statement_date` (billing date in **original PDF format**, not ISO); survives confirm, deleted on discard
+- **`uploads`** — one row per statement; `statement_month` (YYYY-MM) derived from `statement_date` (billing date in **original PDF format**, not ISO); survives confirm, deleted on discard. Also holds the printed summary figures (`summary_prev_balance`, `summary_credits_total`, `summary_debits_total`, `summary_new_balance` — credit: prev balance / payments+credits / new transactions / total tagihan; debit: opening / mutasi kredit / mutasi debet / closing) and `stored_ext` (extension of the persisted source file in `data/statements/`, NULL once confirmed/discarded)
 - **`staged_transactions`** — pure buffer; holds extracted rows pending review; cleared entirely on every confirm or discard; `transaction_type` ∈ {DB, CR} (CR rows shown for context in debit review but never confirmed)
 - **`transactions`** — confirmed rows only; never contains staged or CR data; all downstream views read only this table. `upload_id` is NULL for manually-added transactions.
 - **`settings`** — generic key-value store; currently holds `monthly_budget` (household-level IDR integer as text; absence = no target set)
 
 ## Upload & Staging Flow
 
+Uploading starts from the **Statements page**: the coverage matrix at the top (rows = credit/debit
+accounts, columns = last 6 calendar months) shows ✓ uploaded / ⏳ pending review / `+` missing per
+cell. A missing cell (or the "+ Upload Statement" button) opens the upload modal (`#upload-modal`,
+`openUploadModal(accountId, expectedMonth)`); a pending cell opens the review modal; an uploaded
+cell scroll-flashes to that upload's row in the list below.
+
 ```
 POST /api/upload
-  → validate file magic bytes
-  → Claude extracts (credit or debit prompt + bank_notes + rules)
+  → validate file magic bytes + decrypt PDF (_read_validated_file)
+  → Claude extracts (credit or debit prompt + bank_notes + rules) incl. printed summary figures
   → check_duplicate(account_id, stmt_month)
-      if duplicate → return {duplicate:true, transactions} (not staged yet)
-  → save_staged() → staged_transactions + uploads record
+      if duplicate → return {duplicate:true, transactions, summary} (not staged yet)
+  → save_staged() → staged_transactions + uploads record + file to data/statements/<id>.<ext>
   → return {staged:true, upload_id}
 
-Frontend opens review modal (immediate after upload, or via Statements "Review →")
+Frontend opens review modal (immediate after upload, or via Statements "Review →" / ⏳ cell)
+  Reconciliation panel at top: extracted subtotals vs printed statement figures
+  (✓ match / ⚠ delta badges, Rp 1 tolerance); updates live on inline edits
+  Side-by-side document pane (right, ~45%): GET /api/uploads/<id>/file in <embed>/<img>;
+  toggled via "Hide/Show statement"; absent when no stored file (pre-feature uploads)
   Review: inline edit category/description/amount/real, delete rows
-  Confirm → POST /api/uploads/<id>/confirm → confirm_upload() → DB rows → transactions
-  Discard → DELETE /api/uploads/<id> → discard_upload() → upload + staged deleted
+  Confirm → POST /api/uploads/<id>/confirm → confirm_upload() → DB rows → transactions; file deleted
+  Discard → DELETE /api/uploads/<id> → discard_upload() → upload + staged + file deleted
 
 POST /api/upload/confirm  (duplicate override path)
-  → same as above but skips duplicate check; calls save_staged() directly
+  → same as above but skips duplicate check; calls save_staged() directly.
+  Multipart (frontend re-attaches the file so it can be persisted) or plain JSON (no file stored)
 
 POST /api/transactions  (manual entry path)
   → direct insert into transactions; no upload record, no staging
 ```
+
+Statement files live only while a review is pending — `data/statements/` is empty whenever
+nothing is awaiting review (confirm/discard delete the file; `init_db()` sweeps orphans).
 
 ## Settlement Logic
 
@@ -149,8 +164,9 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 | PATCH | `/api/accounts/<id>` | Update account (name, owner, bank, last_four, account_type) |
 | DELETE | `/api/accounts/<id>` | Delete account (transactions preserved, lose account link) |
 | POST | `/api/upload` | Extract → stage; returns `{duplicate:true}` or `{staged:true, upload_id}` |
-| POST | `/api/upload/confirm` | Force-stage a duplicate (skips duplicate check) |
-| GET | `/api/uploads/<id>/staged` | Staged rows for review (includes account_type for layout) |
+| POST | `/api/upload/confirm` | Force-stage a duplicate (skips duplicate check); multipart with file, or JSON |
+| GET | `/api/uploads/<id>/staged` | Staged rows for review (includes account_type, summary_*, stored_ext) |
+| GET | `/api/uploads/<id>/file` | Serve the stored statement document; 404 once confirmed/discarded |
 | PATCH | `/api/staged/<id>` | Edit staged row (category, description, amount, is_real_expense) |
 | DELETE | `/api/staged/<id>` | Remove single staged row |
 | POST | `/api/uploads/<id>/confirm` | Confirm: DB staged rows → transactions, clear staged |
