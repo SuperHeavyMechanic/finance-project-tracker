@@ -511,6 +511,26 @@
     .review-num-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
     .pending-badge { display: inline-block; padding: 2px 9px; border-radius: var(--r-pill); font-size: 11px; font-weight: 700; background: var(--warning-soft); color: var(--warning-ink); }
 
+    /* ── STATEMENT COVERAGE MATRIX ── */
+    .coverage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .coverage-tbl th { text-align: center; padding: 10px 12px; font-size: 11px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; background: var(--surface-sunken); border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .coverage-tbl td { border-bottom: 1px solid var(--line); }
+    .coverage-tbl tbody tr:last-child td { border-bottom: none; }
+    .cov-acc { padding: 10px 14px; white-space: nowrap; font-weight: 500; }
+    .cov-cell { text-align: center; width: 84px; min-width: 72px; padding: 10px 8px; cursor: pointer; font-size: 14px; transition: background-color var(--dur-fast) ease; }
+    .cov-ok { color: var(--success); font-weight: 700; }
+    .cov-pending { background: var(--warning-soft); }
+    .cov-missing .cov-plus { color: var(--line-strong); font-size: 16px; font-weight: 600; transition: color var(--dur-fast) ease; }
+    @media (hover: hover) and (pointer: fine) {
+      .cov-cell:hover { background: var(--accent-soft); }
+      .cov-missing:hover .cov-plus { color: var(--accent); }
+    }
+    tr.stmt-row-flash td { animation: stmtFlash 1.6s var(--ease-out); }
+    @keyframes stmtFlash {
+      0%, 35% { background-color: var(--accent-soft); }
+      100% { background-color: transparent; }
+    }
+
     /* ── REDUCED MOTION ──
        Reduced ≠ removed: movement (translate/scale/rotate) is stripped,
        opacity & color transitions are kept to aid comprehension. */
@@ -547,7 +567,6 @@
     <a data-view="settlements">Settlements</a>
     <a data-view="accounts">Accounts</a>
     <a data-view="statements">Statements</a>
-    <a data-view="upload">Upload</a>
   </nav>
 </header>
 
@@ -688,15 +707,22 @@
 
   <!-- ── STATEMENTS ── -->
   <div id="view-statements" class="view">
-    <div class="page-title">Statements</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+      <div class="page-title" style="margin:0">Statements</div>
+      <button class="btn btn-sm" onclick="openUploadModal()">+ Upload Statement</button>
+    </div>
+    <div id="stmt-coverage"></div>
     <div id="statements-list"></div>
   </div>
 
-  <!-- ── UPLOAD ── -->
-  <div id="view-upload" class="view">
-    <div class="page-title">Upload Statement</div>
-    <div style="max-width:520px;">
-      <div class="upload-steps">
+</main>
+
+<!-- ── UPLOAD MODAL ── -->
+<div class="modal-overlay" id="upload-modal" onclick="if(event.target===this)closeUploadModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">Upload Statement</div>
+    <div class="modal-body">
+      <div class="upload-steps" style="margin:0 0 20px;max-width:none;">
 
         <div class="step-row">
           <div class="step-label">1 · Select account</div>
@@ -704,6 +730,7 @@
             <option value="">— Choose account —</option>
           </select>
           <div id="up-owner-display" style="display:none;margin-top:4px;"></div>
+          <div id="up-month-hint" style="display:none;margin-top:4px;font-size:12px;color:var(--ink-2);"></div>
         </div>
 
         <div class="step-row">
@@ -731,7 +758,7 @@
       </div>
       <div class="error-box" id="up-error"></div>
       <div class="success-box" id="up-success"></div>
-      <button class="btn btn-sm" id="up-review-btn" style="display:none;margin-top:10px" onclick="openReviewModal(pendingUploadId)">Review now →</button>
+      <button class="btn btn-sm" id="up-review-btn" style="display:none;margin-top:10px" onclick="closeUploadModal();openReviewModal(pendingUploadId)">Review now →</button>
 
       <!-- duplicate warning -->
       <div id="up-duplicate" style="display:none;margin-top:16px;" class="card">
@@ -743,9 +770,11 @@
         </div>
       </div>
     </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeUploadModal()">Close</button>
+    </div>
   </div>
-
-</main>
+</div>
 
 <!-- ── FLOATING ACTION BAR ── -->
 <div class="action-bar" id="action-bar">
@@ -966,7 +995,6 @@ function navigate(view) {
   if (view === 'settlements') loadSettlements();
   if (view === 'accounts') loadAccounts();
   if (view === 'statements') loadStatements();
-  if (view === 'upload') initUpload();
 }
 
 // ── UTILS ──
@@ -2045,8 +2073,78 @@ async function loadAccounts() {
 }
 
 // ── STATEMENTS ──
+function lastNMonths(n) {
+  const out = [];
+  const today = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+function renderCoverageMatrix(data) {
+  const el = document.getElementById('stmt-coverage');
+  const accounts = allAccounts.filter(a => a.account_type === 'credit' || a.account_type === 'debit');
+  if (!accounts.length) { el.innerHTML = ''; return; }
+
+  const months = lastNMonths(6);
+  // (account_id, month) → most relevant upload: pending beats confirmed
+  const cellMap = {};
+  data.forEach(group => {
+    group.uploads.forEach(u => {
+      if (!u.statement_month) return;
+      const key = `${u.account_id}|${u.statement_month}`;
+      const isPending = (u.staged_count || 0) > 0 && (u.active_count || 0) === 0;
+      const cur = cellMap[key];
+      if (!cur || (isPending && !cur.isPending)) cellMap[key] = {upload: u, isPending};
+    });
+  });
+
+  const rows = accounts.map(acc => {
+    const cells = months.map(m => {
+      const hit = cellMap[`${acc.id}|${m}`];
+      if (!hit) {
+        return `<td class="cov-cell cov-missing" title="No statement for ${fmtMonth(m)} — click to upload"
+                    onclick="openUploadModal(${acc.id},'${m}')"><span class="cov-plus">+</span></td>`;
+      }
+      if (hit.isPending) {
+        return `<td class="cov-cell cov-pending" title="Pending review — click to review"
+                    onclick="openReviewModal(${hit.upload.id})">⏳</td>`;
+      }
+      return `<td class="cov-cell cov-ok" title="Uploaded — click to see details"
+                  onclick="jumpToStatementRow(${hit.upload.id})">✓</td>`;
+    }).join('');
+    return `<tr>
+      <td class="cov-acc">${ownerBadge(acc.owner)} <span>${esc(acc.name)}</span></td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<div class="table-wrap" style="margin-bottom:32px;"><div style="overflow-x:auto;">
+    <table class="coverage-tbl">
+      <thead><tr>
+        <th style="text-align:left;">Account</th>
+        ${months.map(m => `<th>${fmtMonth(m)}</th>`).join('')}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div></div>`;
+}
+
+function jumpToStatementRow(uploadId) {
+  const row = document.getElementById(`stmt-row-${uploadId}`);
+  if (!row) return;
+  row.scrollIntoView({behavior: 'smooth', block: 'center'});
+  row.classList.remove('stmt-row-flash');
+  void row.offsetWidth;
+  row.classList.add('stmt-row-flash');
+}
+
 async function loadStatements() {
+  await fetchAccounts();
   const data = await api('/api/statements');
+  renderCoverageMatrix(data);
   const el = document.getElementById('statements-list');
   if (!data.length) {
     el.innerHTML = '<div class="no-data" style="padding:48px;text-align:center;color:var(--ink-3)">No statements uploaded yet.</div>';
@@ -2059,7 +2157,7 @@ async function loadStatements() {
       const isPending = (u.staged_count || 0) > 0 && (u.active_count || 0) === 0;
       const changed = !isPending && (u.active_count !== u.original_count || Math.abs((u.active_total||0) - (u.original_total||0)) > 0.5);
       const deletedCount = (u.original_count||0) - (u.active_count||0);
-      return `<tr${isPending ? ' style="background:var(--warning-soft);"' : ''}>
+      return `<tr id="stmt-row-${u.id}"${isPending ? ' style="background:var(--warning-soft);"' : ''}>
         <td style="white-space:nowrap;font-weight:500">${stmtRef(acc.bank, u.statement_date, u.statement_month)}</td>
         <td style="font-size:12px;color:var(--ink-2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(u.filename||'')}">${esc(u.filename||'—')}</td>
         <td style="white-space:nowrap;font-size:12px;color:var(--ink-2)">${(u.uploaded_at||'').slice(0,10)||'—'}</td>
@@ -2098,13 +2196,28 @@ async function loadStatements() {
 // ── UPLOAD ──
 let stagedFile = null;
 
-async function initUpload() {
+function openUploadModal(accountId, expectedMonth) {
   const sel = document.getElementById('up-account');
-  const cur = sel.value;
   sel.innerHTML = '<option value="">— Choose account —</option>' +
-    allAccounts.map(a => `<option value="${a.id}" ${a.id==cur?'selected':''}>${a.owner} · ${a.name}</option>`).join('');
+    allAccounts.map(a => `<option value="${a.id}" ${a.id==accountId?'selected':''}>${a.owner} · ${a.name}</option>`).join('');
   document.getElementById('up-owner-display').style.display = 'none';
+  const hint = document.getElementById('up-month-hint');
+  if (expectedMonth) {
+    hint.textContent = `Filling the ${fmtMonth(expectedMonth)} slot — the actual month is read from the statement itself.`;
+    hint.style.display = 'block';
+  } else {
+    hint.style.display = 'none';
+  }
+  resetUpload();
   hideUploadState();
+  onAccountChange();
+  document.getElementById('upload-modal').classList.add('visible');
+}
+
+function closeUploadModal() {
+  document.getElementById('upload-modal').classList.remove('visible');
+  const currentView = document.querySelector('.view.active')?.id?.replace('view-', '');
+  if (currentView === 'statements') loadStatements();
 }
 
 function onAccountChange() {
