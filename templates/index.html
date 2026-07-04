@@ -1388,20 +1388,12 @@ async function initTransactions() {
   allTxRows.forEach(t => { if (t.upload_id && !uploadMap.has(t.upload_id)) uploadMap.set(t.upload_id, t); });
   allUploads = [...uploadMap.values()]
     .sort((a, b) => (a.upload_statement_month||'') > (b.upload_statement_month||'') ? -1 : 1)
-    .map(u => {
-      const bank = (u.bank || '').toUpperCase();
-      let dateLabel = fmtMonth(u.upload_statement_month);
-      if (u.statement_date) {
-        const sd = u.statement_date.includes('-')
-          ? new Date(u.statement_date + 'T00:00:00')
-          : (() => { const [dd,mm,yyyy] = u.statement_date.split('/'); return new Date(`${yyyy}-${mm}-${dd}T00:00:00`); })();
-        if (!isNaN(sd)) {
-          const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][sd.getMonth()];
-          dateLabel = `${String(sd.getDate()).padStart(2,'0')}-${mon}-${String(sd.getFullYear()).slice(2)}`;
-        }
-      }
-      return { uploadId: u.upload_id, label: `CC ${bank} · ${dateLabel}` };
-    });
+    .map(u => ({
+      uploadId: u.upload_id,
+      // Account name (not bank) disambiguates accounts that share a bank,
+      // e.g. two different BCA accounts or a Jenius credit card + Jenius debit account
+      label: `${u.account_name || '—'} · ${parseStatementDateLabel(u.statement_date, u.upload_statement_month)}`,
+    }));
 
   const uploadSel = document.getElementById('tx-upload');
   if (uploadSel) {
