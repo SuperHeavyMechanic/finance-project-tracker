@@ -4,6 +4,7 @@ import json
 import io
 import csv
 import calendar
+import re
 from datetime import date
 from flask import Flask, request, jsonify, render_template, Response, send_file
 from dotenv import load_dotenv
@@ -16,7 +17,7 @@ from db import (init_db, get_accounts, create_account, update_account, delete_ac
                 create_transaction, get_staged, update_staged, delete_staged_tx, confirm_upload,
                 discard_upload, get_dashboard_data, get_settlements, bulk_settle_transactions,
                 get_statements, parse_date, _dominant_month, get_setting, set_setting,
-                get_upload_file)
+                get_upload_file, mark_manual_coverage, unmark_manual_coverage, get_manual_coverage)
 from rules import apply_rules, build_rules_prompt, build_bank_notes
 
 load_dotenv()
@@ -428,6 +429,32 @@ def api_settle_batch():
 @app.route('/api/statements')
 def api_statements():
     return jsonify(get_statements())
+
+
+_MONTH_RE = re.compile(r'^\d{4}-\d{2}$')
+
+@app.route('/api/manual-coverage')
+def api_get_manual_coverage():
+    return jsonify(get_manual_coverage())
+
+
+@app.route('/api/manual-coverage', methods=['POST'])
+def api_mark_manual_coverage():
+    data = request.json or {}
+    account_id = data.get('account_id')
+    month = data.get('month')
+    if not account_id or not _MONTH_RE.match(month or ''):
+        return jsonify({'error': 'account_id and month (YYYY-MM) are required'}), 400
+    mark_manual_coverage(int(account_id), month)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/manual-coverage/<int:account_id>/<month>', methods=['DELETE'])
+def api_unmark_manual_coverage(account_id, month):
+    if not _MONTH_RE.match(month):
+        return jsonify({'error': 'month must be YYYY-MM'}), 400
+    unmark_manual_coverage(account_id, month)
+    return jsonify({'ok': True})
 
 
 def _csv_date(date_parsed):

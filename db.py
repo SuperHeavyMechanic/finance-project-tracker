@@ -126,6 +126,12 @@ def init_db():
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS manual_coverage (
+            account_id INTEGER NOT NULL REFERENCES accounts(id),
+            month      TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (account_id, month)
+        );
     ''')
     for _col_sql in [
         "ALTER TABLE uploads ADD COLUMN statement_date TEXT",
@@ -504,6 +510,31 @@ def bulk_settle_transactions(ids, settled_date):
     return count
 
 
+def mark_manual_coverage(account_id, month):
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO manual_coverage (account_id, month) VALUES (?,?) '
+        'ON CONFLICT(account_id, month) DO NOTHING',
+        (account_id, month)
+    )
+    conn.commit()
+    conn.close()
+
+
+def unmark_manual_coverage(account_id, month):
+    conn = get_db()
+    conn.execute('DELETE FROM manual_coverage WHERE account_id=? AND month=?', (account_id, month))
+    conn.commit()
+    conn.close()
+
+
+def get_manual_coverage():
+    conn = get_db()
+    rows = conn.execute('SELECT account_id, month FROM manual_coverage').fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_statements():
     conn = get_db()
     uploads = conn.execute('''
@@ -563,6 +594,10 @@ def save_staged(account_id, filename, transactions, statement_date=None, summary
         with open(statement_file_path(upload_id, file_ext), 'wb') as f:
             f.write(file_bytes)
         c.execute('UPDATE uploads SET stored_ext=? WHERE id=?', (file_ext, upload_id))
+
+    # A real statement now covers this slot — any "entered manually" marker is stale
+    if stmt_month:
+        c.execute('DELETE FROM manual_coverage WHERE account_id=? AND month=?', (account_id, stmt_month))
 
     for t in transactions:
         c.execute('''

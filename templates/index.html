@@ -43,6 +43,9 @@
       --success-soft-border: #C4E5D2;
       --warning-ink: #8A6116;
       --warning-soft: #F6ECD4;
+      --info: #2563EB;
+      --info-soft: #E4ECFC;
+      --info-soft-border: #C7D7FA;
 
       /* color · owners */
       --owner-shan: #2563EB;   --owner-shan-soft: #E4ECFC;   --owner-shan-ink: #1D4ED8;
@@ -528,11 +531,15 @@
     .cov-cell { text-align: center; width: 84px; min-width: 72px; padding: 10px 8px; cursor: pointer; font-size: 14px; transition: background-color var(--dur-fast) ease; }
     .cov-ok { color: var(--success); font-weight: 700; }
     .cov-pending { background: var(--warning-soft); }
+    .cov-manual { color: var(--info); font-weight: 700; background: var(--info-soft); }
     .cov-missing .cov-plus { color: var(--line-strong); font-size: 16px; font-weight: 600; transition: color var(--dur-fast) ease; }
     @media (hover: hover) and (pointer: fine) {
       .cov-cell:hover { background: var(--accent-soft); }
       .cov-missing:hover .cov-plus { color: var(--accent); }
     }
+    .cov-legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-bottom: 10px; }
+    .cov-legend-dot { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 5px; font-size: 11px; margin-right: 5px; vertical-align: middle; }
+    .cov-legend-dot.cov-missing { color: var(--line-strong); background: var(--surface-sunken); }
     /* ── RECONCILIATION PANEL (review modal) ── */
     .recon-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 18px; box-shadow: var(--shadow-sm); margin-bottom: 20px; }
     .recon-row { font-size: 13px; color: var(--ink-2); padding: 5px 0; border-top: 1px solid var(--line); }
@@ -789,6 +796,17 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline btn-sm" onclick="closeUploadModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── COVERAGE CELL CHOICE MODAL ── -->
+<div class="modal-overlay" id="coverage-choice-modal" onclick="if(event.target===this)closeCoverageChoice()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title" id="cov-choice-title">Record statement</div>
+    <div class="modal-body" id="cov-choice-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" onclick="closeCoverageChoice()">Cancel</button>
     </div>
   </div>
 </div>
@@ -2101,7 +2119,7 @@ function lastNMonths(n) {
   return out;
 }
 
-function renderCoverageMatrix(data) {
+function renderCoverageMatrix(data, manualRows) {
   const el = document.getElementById('stmt-coverage');
   const accounts = allAccounts.filter(a => a.account_type === 'credit' || a.account_type === 'debit');
   if (!accounts.length) { el.innerHTML = ''; return; }
@@ -2118,13 +2136,18 @@ function renderCoverageMatrix(data) {
       if (!cur || (isPending && !cur.isPending)) cellMap[key] = {upload: u, isPending};
     });
   });
+  const manualSet = new Set((manualRows || []).map(m => `${m.account_id}|${m.month}`));
 
   const rows = accounts.map(acc => {
     const cells = months.map(m => {
       const hit = cellMap[`${acc.id}|${m}`];
       if (!hit) {
-        return `<td class="cov-cell cov-missing" title="No statement for ${fmtMonth(m)} — click to upload"
-                    onclick="openUploadModal(${acc.id},'${m}')"><span class="cov-plus">+</span></td>`;
+        if (manualSet.has(`${acc.id}|${m}`)) {
+          return `<td class="cov-cell cov-manual" title="Entered manually — click to change"
+                      onclick="openCoverageChoice(${acc.id},'${m}',true)">✓</td>`;
+        }
+        return `<td class="cov-cell cov-missing" title="No statement for ${fmtMonth(m)} — click to record"
+                    onclick="openCoverageChoice(${acc.id},'${m}',false)"><span class="cov-plus">+</span></td>`;
       }
       if (hit.isPending) {
         return `<td class="cov-cell cov-pending" title="Pending review — click to review"
@@ -2139,15 +2162,23 @@ function renderCoverageMatrix(data) {
     </tr>`;
   }).join('');
 
-  el.innerHTML = `<div class="table-wrap" style="margin-bottom:32px;"><div style="overflow-x:auto;">
-    <table class="coverage-tbl">
-      <thead><tr>
-        <th style="text-align:left;">Account</th>
-        ${months.map(m => `<th>${fmtMonth(m)}</th>`).join('')}
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div></div>`;
+  el.innerHTML = `<div style="margin-bottom:32px;">
+    <div class="cov-legend">
+      <span><span class="cov-legend-dot cov-ok">✓</span> Uploaded</span>
+      <span><span class="cov-legend-dot cov-manual">✓</span> Entered manually</span>
+      <span><span class="cov-legend-dot cov-pending">⏳</span> Pending review</span>
+      <span><span class="cov-legend-dot cov-missing">+</span> Missing</span>
+    </div>
+    <div class="table-wrap"><div style="overflow-x:auto;">
+      <table class="coverage-tbl">
+        <thead><tr>
+          <th style="text-align:left;">Account</th>
+          ${months.map(m => `<th>${fmtMonth(m)}</th>`).join('')}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div></div>
+  </div>`;
 }
 
 function jumpToStatementRow(uploadId) {
@@ -2161,8 +2192,8 @@ function jumpToStatementRow(uploadId) {
 
 async function loadStatements() {
   await fetchAccounts();
-  const data = await api('/api/statements');
-  renderCoverageMatrix(data);
+  const [data, manual] = await Promise.all([api('/api/statements'), api('/api/manual-coverage')]);
+  renderCoverageMatrix(data, manual);
   const el = document.getElementById('statements-list');
   if (!data.length) {
     el.innerHTML = '<div class="no-data" style="padding:48px;text-align:center;color:var(--ink-3)">No statements uploaded yet.</div>';
@@ -2236,6 +2267,62 @@ function closeUploadModal() {
   document.getElementById('upload-modal').classList.remove('visible');
   const currentView = document.querySelector('.view.active')?.id?.replace('view-', '');
   if (currentView === 'statements') loadStatements();
+}
+
+// ── COVERAGE CELL CHOICE (missing / manually-entered) ──
+let _covChoiceCtx = null;
+
+function openCoverageChoice(accountId, month, isManual) {
+  _covChoiceCtx = {accountId, month};
+  document.getElementById('cov-choice-title').textContent = fmtMonth(month);
+  const body = document.getElementById('cov-choice-body');
+  body.innerHTML = isManual ? `
+      <div class="modal-opt" onclick="covChoiceUpload()">
+        <div class="opt-title">Upload a statement instead</div>
+        <div class="opt-sub">Replaces the manual entry with an extracted statement</div>
+      </div>
+      <div class="modal-opt" onclick="covChoiceRemoveManual()">
+        <div class="opt-title">Remove manual entry</div>
+        <div class="opt-sub">Marks ${fmtMonth(month)} as missing again</div>
+      </div>
+    ` : `
+      <div class="modal-opt" onclick="covChoiceUpload()">
+        <div class="opt-title">Upload a statement</div>
+        <div class="opt-sub">Extract transactions from a PDF / JPG / PNG</div>
+      </div>
+      <div class="modal-opt" onclick="covChoiceMarkManual()">
+        <div class="opt-title">I entered this manually</div>
+        <div class="opt-sub">Already added these transactions by hand in Transactions</div>
+      </div>
+    `;
+  document.getElementById('coverage-choice-modal').classList.add('visible');
+}
+
+function closeCoverageChoice() {
+  document.getElementById('coverage-choice-modal').classList.remove('visible');
+  _covChoiceCtx = null;
+}
+
+function covChoiceUpload() {
+  const ctx = _covChoiceCtx;
+  closeCoverageChoice();
+  if (ctx) openUploadModal(ctx.accountId, ctx.month);
+}
+
+async function covChoiceMarkManual() {
+  const ctx = _covChoiceCtx;
+  closeCoverageChoice();
+  if (!ctx) return;
+  await fetch('/api/manual-coverage', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({account_id: ctx.accountId, month: ctx.month})});
+  loadStatements();
+}
+
+async function covChoiceRemoveManual() {
+  const ctx = _covChoiceCtx;
+  closeCoverageChoice();
+  if (!ctx) return;
+  await fetch(`/api/manual-coverage/${ctx.accountId}/${ctx.month}`, {method:'DELETE'});
+  loadStatements();
 }
 
 function onAccountChange() {

@@ -45,6 +45,7 @@ assets Flask serves at `/static/*` (default Flask static config, no custom wirin
 - `confirm_upload(upload_id)` — inserts only `transaction_type='DB'` staged rows into `transactions`, then deletes all staged rows for that upload **and the stored statement file**
 - `discard_upload(upload_id)` — deletes all staged rows + the upload record entirely **and the stored statement file**
 - `get_upload_file(upload_id)` — returns `(path, ext)` for a pending upload's stored document, or None
+- `mark_manual_coverage(account_id, month)` / `unmark_manual_coverage(account_id, month)` / `get_manual_coverage()` — CRUD on the `manual_coverage` table (`(account_id, month)` composite PK). Purely a user-declared bookkeeping flag for the Statements coverage matrix ("I entered this manually"), not tied to any actual transactions. Automatically cleared by `save_staged()` the moment a real upload lands on the same `(account_id, statement_month)` slot
 - `get_staged(upload_id)` — returns staged rows joined with account info (includes `account_type`)
 - `parse_date(s)` — normalises Indonesian bank date formats (DD/MM/YYYY, DD-Mon-YY, ISO) to YYYY-MM-DD
 - `create_transaction(fields)` — direct insert into `transactions` (manual entry, no upload/staging)
@@ -85,14 +86,26 @@ Five tables in `data/finance.db` (gitignored):
 - **`staged_transactions`** — pure buffer; holds extracted rows pending review; cleared entirely on every confirm or discard; `transaction_type` ∈ {DB, CR} (CR rows shown for context in debit review but never confirmed)
 - **`transactions`** — confirmed rows only; never contains staged or CR data; all downstream views read only this table. `upload_id` is NULL for manually-added transactions.
 - **`settings`** — generic key-value store; currently holds `monthly_budget` (household-level IDR integer as text; absence = no target set)
+- **`manual_coverage`** — `(account_id, month)` composite PK; marks a Statements coverage-matrix cell as "entered manually" instead of via upload. No FK to transactions — it's a declared checklist state, cleared automatically the moment a real statement is staged for that slot
 
 ## Upload & Staging Flow
 
 Uploading starts from the **Statements page**: the coverage matrix at the top (rows = credit/debit
-accounts, columns = last 6 calendar months) shows ✓ uploaded / ⏳ pending review / `+` missing per
-cell. A missing cell (or the "+ Upload Statement" button) opens the upload modal (`#upload-modal`,
-`openUploadModal(accountId, expectedMonth)`); a pending cell opens the review modal; an uploaded
-cell scroll-flashes to that upload's row in the list below.
+accounts, columns = last 6 calendar months) shows four states per cell — ✓ green uploaded, ✓ blue
+entered manually, ⏳ pending review, `+` missing (legend above the matrix). A pending cell opens
+the review modal directly; an uploaded cell scroll-flashes to that upload's row in the list below.
+A **missing or manually-entered cell** opens the small chooser modal (`#coverage-choice-modal`,
+`openCoverageChoice(accountId, month, isManual)`):
+- from missing → "Upload a statement" (→ `openUploadModal(accountId, month)`) or "I entered this
+  manually" (→ `POST /api/manual-coverage`, marks the cell blue)
+- from manually-entered → "Upload a statement instead" (same upload modal, re-clickable to change
+  your mind) or "Remove manual entry" (→ `DELETE /api/manual-coverage/<account_id>/<month>`, reverts
+  to missing)
+
+The manual flag is purely declarative bookkeeping — it doesn't check for actual transactions. It's
+cleared automatically by `save_staged()` the instant a real statement is staged for that same
+`(account_id, statement_month)` slot, so choosing "upload instead" and completing a real upload
+naturally replaces the blue check with the green one on next load.
 
 ```
 POST /api/upload
@@ -167,6 +180,9 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 | POST | `/api/upload/confirm` | Force-stage a duplicate (skips duplicate check); multipart with file, or JSON |
 | GET | `/api/uploads/<id>/staged` | Staged rows for review (includes account_type, summary_*, stored_ext) |
 | GET | `/api/uploads/<id>/file` | Serve the stored statement document; 404 once confirmed/discarded |
+| GET | `/api/manual-coverage` | All `(account_id, month)` manual-entry markers |
+| POST | `/api/manual-coverage` | Mark a cell as entered manually: `{account_id, month}` (month = YYYY-MM) |
+| DELETE | `/api/manual-coverage/<account_id>/<month>` | Remove a manual-entry marker |
 | PATCH | `/api/staged/<id>` | Edit staged row (category, description, amount, is_real_expense) |
 | DELETE | `/api/staged/<id>` | Remove single staged row |
 | POST | `/api/uploads/<id>/confirm` | Confirm: DB staged rows → transactions, clear staged |

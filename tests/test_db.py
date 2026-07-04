@@ -269,6 +269,72 @@ class TestStatementFileLifecycle:
         assert os.path.exists(pending_path)  # pending review must survive the sweep
 
 
+class TestManualCoverage:
+    """Manual coverage marks a (account, month) cell as 'entered by hand' —
+    purely a bookkeeping flag, cleared automatically once a real upload lands there."""
+
+    def test_mark_and_get(self, fresh_db):
+        acc_id = _account()
+        db.mark_manual_coverage(acc_id, '2026-06')
+        rows = db.get_manual_coverage()
+        assert rows == [{'account_id': acc_id, 'month': '2026-06'}]
+
+    def test_mark_is_idempotent(self, fresh_db):
+        acc_id = _account()
+        db.mark_manual_coverage(acc_id, '2026-06')
+        db.mark_manual_coverage(acc_id, '2026-06')
+        assert len(db.get_manual_coverage()) == 1
+
+    def test_unmark_removes_it(self, fresh_db):
+        acc_id = _account()
+        db.mark_manual_coverage(acc_id, '2026-06')
+        db.unmark_manual_coverage(acc_id, '2026-06')
+        assert db.get_manual_coverage() == []
+
+    def test_unmark_missing_is_a_noop(self, fresh_db):
+        acc_id = _account()
+        db.unmark_manual_coverage(acc_id, '2026-06')  # must not raise
+        assert db.get_manual_coverage() == []
+
+    def test_cleared_when_real_upload_lands_on_same_slot(self, fresh_db):
+        acc_id = _account()
+        db.mark_manual_coverage(acc_id, '2026-04')
+        db.save_staged(acc_id, 'test.pdf', [_tx()], statement_date='30/04/2026')
+        assert db.get_manual_coverage() == []
+
+    def test_untouched_for_a_different_slot(self, fresh_db):
+        acc_id = _account()
+        db.mark_manual_coverage(acc_id, '2026-05')
+        db.save_staged(acc_id, 'test.pdf', [_tx()], statement_date='30/04/2026')
+        assert db.get_manual_coverage() == [{'account_id': acc_id, 'month': '2026-05'}]
+
+
+class TestManualCoverageApi:
+    def test_post_rejects_bad_month(self, client):
+        resp = client.post('/api/manual-coverage', json={'account_id': 1, 'month': 'June-2026'},
+                           content_type='application/json')
+        assert resp.status_code == 400
+
+    def test_post_rejects_missing_account(self, client):
+        resp = client.post('/api/manual-coverage', json={'month': '2026-06'},
+                           content_type='application/json')
+        assert resp.status_code == 400
+
+    def test_post_and_get_roundtrip(self, client):
+        resp = client.post('/api/manual-coverage', json={'account_id': 1, 'month': '2026-06'},
+                           content_type='application/json')
+        assert resp.status_code == 200
+        data = client.get('/api/manual-coverage').get_json()
+        assert data == [{'account_id': 1, 'month': '2026-06'}]
+
+    def test_delete_removes_it(self, client):
+        client.post('/api/manual-coverage', json={'account_id': 1, 'month': '2026-06'},
+                    content_type='application/json')
+        resp = client.delete('/api/manual-coverage/1/2026-06')
+        assert resp.status_code == 200
+        assert client.get('/api/manual-coverage').get_json() == []
+
+
 class TestSettings:
     def test_get_missing_setting_returns_none(self, fresh_db):
         assert db.get_setting('monthly_budget') is None
