@@ -228,6 +228,47 @@ class TestStatementSummary:
         assert rows[0]['summary_new_balance'] is None
 
 
+class TestStatementFileLifecycle:
+    """Statement files persist only while a review is pending — deleted on confirm/discard."""
+
+    def _stage_with_file(self):
+        acc_id = _account()
+        upload_id, _ = db.save_staged(acc_id, 't.pdf', [_tx()], statement_date='30/04/2026',
+                                      file_bytes=b'%PDF-fake', file_ext='pdf')
+        return upload_id, db.statement_file_path(upload_id, 'pdf')
+
+    def test_file_written_on_stage(self, fresh_db):
+        upload_id, path = self._stage_with_file()
+        assert os.path.exists(path)
+        assert db.get_upload_file(upload_id) == (path, 'pdf')
+        assert db.get_staged(upload_id)[0]['stored_ext'] == 'pdf'
+
+    def test_file_deleted_on_confirm(self, fresh_db):
+        upload_id, path = self._stage_with_file()
+        db.confirm_upload(upload_id)
+        assert not os.path.exists(path)
+        assert db.get_upload_file(upload_id) is None
+
+    def test_file_deleted_on_discard(self, fresh_db):
+        upload_id, path = self._stage_with_file()
+        db.discard_upload(upload_id)
+        assert not os.path.exists(path)
+
+    def test_no_file_when_none_given(self, fresh_db):
+        acc_id = _account()
+        upload_id, _ = db.save_staged(acc_id, 't.pdf', [_tx()], statement_date='30/04/2026')
+        assert db.get_upload_file(upload_id) is None
+
+    def test_orphan_sweep_on_init(self, fresh_db):
+        upload_id, pending_path = self._stage_with_file()
+        stray = os.path.join(os.path.dirname(pending_path), '99999.pdf')
+        with open(stray, 'wb') as f:
+            f.write(b'%PDF-stray')
+        db.init_db()
+        assert not os.path.exists(stray)
+        assert os.path.exists(pending_path)  # pending review must survive the sweep
+
+
 class TestSettings:
     def test_get_missing_setting_returns_none(self, fresh_db):
         assert db.get_setting('monthly_budget') is None

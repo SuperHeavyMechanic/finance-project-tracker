@@ -5,7 +5,7 @@ import io
 import csv
 import calendar
 from datetime import date
-from flask import Flask, request, jsonify, render_template, Response
+from flask import Flask, request, jsonify, render_template, Response, send_file
 from dotenv import load_dotenv
 import anthropic
 import pypdf
@@ -15,7 +15,8 @@ from db import (init_db, get_accounts, create_account, update_account, delete_ac
                 get_transactions, get_transactions_by_ids, update_transaction, delete_transaction,
                 create_transaction, get_staged, update_staged, delete_staged_tx, confirm_upload,
                 discard_upload, get_dashboard_data, get_settlements, bulk_settle_transactions,
-                get_statements, parse_date, _dominant_month, get_setting, set_setting)
+                get_statements, parse_date, _dominant_month, get_setting, set_setting,
+                get_upload_file)
 from rules import apply_rules, build_rules_prompt, build_bank_notes
 
 load_dotenv()
@@ -59,6 +60,48 @@ def period_to_statement_date(period_str):
             last_day = calendar.monthrange(y, m)[1]
             return f"{last_day:02d}/{m:02d}/{y}"
     return None
+
+def _read_validated_file(file, password=''):
+    """Validate magic bytes and decrypt PDFs.
+
+    Returns (file_bytes, media_type, ext, error). On error the first three
+    are None; file_bytes are the decrypted bytes for encrypted PDFs.
+    """
+    filename = (file.filename or '').lower()
+    file_bytes = file.read()
+
+    if filename.endswith('.pdf'):
+        media_type, ext = 'application/pdf', 'pdf'
+        if not _file_magic_matches(file_bytes, media_type):
+            return None, None, None, 'File content does not match its extension.'
+        try:
+            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+            if reader.is_encrypted:
+                if reader.decrypt(password or '') == pypdf.PasswordType.NOT_DECRYPTED:
+                    if not password:
+                        return None, None, None, 'This PDF is password-protected. Please enter the password.'
+                    return None, None, None, 'Incorrect PDF password.'
+                writer = pypdf.PdfWriter()
+                for page in reader.pages:
+                    writer.add_page(page)
+                buf = io.BytesIO()
+                writer.write(buf)
+                file_bytes = buf.getvalue()
+        except pypdf.errors.PdfReadError as e:
+            return None, None, None, f'Could not read PDF: {e}'
+    elif filename.endswith(('.jpg', '.jpeg')):
+        media_type, ext = 'image/jpeg', 'jpg'
+        if not _file_magic_matches(file_bytes, media_type):
+            return None, None, None, 'File content does not match its extension.'
+    elif filename.endswith('.png'):
+        media_type, ext = 'image/png', 'png'
+        if not _file_magic_matches(file_bytes, media_type):
+            return None, None, None, 'File content does not match its extension.'
+    else:
+        return None, None, None, 'Unsupported file type. Please upload a PDF, JPG, or PNG.'
+
+    return file_bytes, media_type, ext, None
+
 
 def _normalize_summary(raw, account_type):
     """Map printed statement figures to the generic uploads.summary_* columns."""
@@ -194,39 +237,10 @@ def api_upload():
     account_id = int(account_id)
 
     filename = file.filename or ''
-    file_bytes = file.read()
-    fname_lower = filename.lower()
-
-    if fname_lower.endswith('.pdf'):
-        media_type = 'application/pdf'
-        if not _file_magic_matches(file_bytes, media_type):
-            return jsonify({'error': 'File content does not match its extension.'}), 400
-        password = request.form.get('password', '')
-        try:
-            reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-            if reader.is_encrypted:
-                if reader.decrypt(password or '') == pypdf.PasswordType.NOT_DECRYPTED:
-                    if not password:
-                        return jsonify({'error': 'This PDF is password-protected. Please enter the password.'}), 400
-                    return jsonify({'error': 'Incorrect PDF password.'}), 400
-                writer = pypdf.PdfWriter()
-                for page in reader.pages:
-                    writer.add_page(page)
-                buf = io.BytesIO()
-                writer.write(buf)
-                file_bytes = buf.getvalue()
-        except pypdf.errors.PdfReadError as e:
-            return jsonify({'error': f'Could not read PDF: {e}'}), 400
-    elif fname_lower.endswith(('.jpg', '.jpeg')):
-        media_type = 'image/jpeg'
-        if not _file_magic_matches(file_bytes, media_type):
-            return jsonify({'error': 'File content does not match its extension.'}), 400
-    elif fname_lower.endswith('.png'):
-        media_type = 'image/png'
-        if not _file_magic_matches(file_bytes, media_type):
-            return jsonify({'error': 'File content does not match its extension.'}), 400
-    else:
-        return jsonify({'error': 'Unsupported file type. Please upload a PDF, JPG, or PNG.'}), 400
+    file_bytes, media_type, file_ext, err = _read_validated_file(
+        file, request.form.get('password', ''))
+    if err:
+        return jsonify({'error': err}), 400
 
     encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
     if media_type == 'application/pdf':
@@ -288,7 +302,8 @@ def api_upload():
                 'summary': summary,
             })
 
-        upload_id, stmt_month = save_staged(account_id, filename, extracted, statement_date=statement_date, summary=summary)
+        upload_id, stmt_month = save_staged(account_id, filename, extracted, statement_date=statement_date,
+                                            summary=summary, file_bytes=file_bytes, file_ext=file_ext)
         return jsonify({'success': True, 'staged': True, 'upload_id': upload_id, 'count': len(extracted), 'statement_month': stmt_month})
 
     except json.JSONDecodeError as e:
@@ -301,11 +316,28 @@ def api_upload():
 
 @app.route('/api/upload/confirm', methods=['POST'])
 def api_upload_confirm():
-    data = request.json or {}
+    # Duplicate-override path. Multipart (with the original file re-attached so
+    # it can be persisted for the review pane) or plain JSON (no file stored).
+    file_bytes = file_ext = None
+    if 'file' in request.files:
+        data = {
+            'account_id': int(request.form['account_id']),
+            'filename': request.form.get('filename', 'statement'),
+            'statement_date': request.form.get('statement_date') or None,
+            'transactions': json.loads(request.form.get('transactions', '[]')),
+            'summary': json.loads(request.form.get('summary', 'null')),
+        }
+        file_bytes, _, file_ext, err = _read_validated_file(
+            request.files['file'], request.form.get('password', ''))
+        if err:
+            return jsonify({'error': err}), 400
+    else:
+        data = request.json or {}
     upload_id, stmt_month = save_staged(
         data['account_id'], data.get('filename', 'statement'), data.get('transactions', []),
         statement_date=data.get('statement_date'),
         summary=data.get('summary'),
+        file_bytes=file_bytes, file_ext=file_ext,
     )
     return jsonify({'success': True, 'staged': True, 'upload_id': upload_id, 'count': len(data.get('transactions', [])), 'statement_month': stmt_month})
 
@@ -461,6 +493,16 @@ def api_export():
 @app.route('/api/uploads/<int:upload_id>/staged')
 def api_get_staged(upload_id):
     return jsonify(get_staged(upload_id))
+
+
+@app.route('/api/uploads/<int:upload_id>/file')
+def api_get_upload_file(upload_id):
+    info = get_upload_file(upload_id)
+    if not info:
+        return jsonify({'error': 'No stored file for this upload'}), 404
+    path, ext = info
+    mimetypes = {'pdf': 'application/pdf', 'jpg': 'image/jpeg', 'png': 'image/png'}
+    return send_file(path, mimetype=mimetypes.get(ext, 'application/octet-stream'))
 
 
 @app.route('/api/staged/<int:tx_id>', methods=['PATCH'])

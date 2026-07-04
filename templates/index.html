@@ -511,6 +511,14 @@
     .review-num-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
     .pending-badge { display: inline-block; padding: 2px 9px; border-radius: var(--r-pill); font-size: 11px; font-weight: 700; background: var(--warning-soft); color: var(--warning-ink); }
 
+    /* ── REVIEW SPLIT (side-by-side document pane) ── */
+    .review-body.split { display: flex; padding: 0; overflow: hidden; }
+    .review-body.split .review-pane-tx { flex: 1.15; min-width: 0; overflow-y: auto; padding: 24px 32px; }
+    .review-pane-doc { flex: 1; min-width: 0; border-left: 1px solid var(--line); background: var(--surface-sunken); }
+    .review-pane-doc embed { width: 100%; height: 100%; border: 0; display: block; }
+    .review-doc-img { width: 100%; height: 100%; overflow: auto; padding: 16px; }
+    .review-doc-img img { max-width: 100%; display: block; margin: 0 auto; }
+
     /* ── STATEMENT COVERAGE MATRIX ── */
     .coverage-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
     .coverage-tbl th { text-align: center; padding: 10px 12px; font-size: 11px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; background: var(--surface-sunken); border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -945,6 +953,7 @@
       <div id="review-title" style="font-size:18px;font-weight:700;"></div>
       <div id="review-sub" style="font-size:13px;color:var(--ink-2);margin-top:3px;"></div>
     </div>
+    <button class="btn btn-outline btn-sm" id="review-doc-toggle" style="display:none" onclick="toggleReviewDoc()">Hide statement</button>
   </div>
   <div class="review-body" id="review-body"></div>
   <div class="review-footer">
@@ -2314,7 +2323,22 @@ async function doUpload() {
 async function confirmDuplicate() {
   document.getElementById('up-duplicate').style.display = 'none';
   showStatus('up-status', 'Saving…');
-  const res = await fetch('/api/upload/confirm', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(pendingDuplicate)});
+  // Re-attach the original file so the server can persist it for the review pane
+  let res;
+  if (stagedFile) {
+    const fd = new FormData();
+    fd.append('file', stagedFile);
+    fd.append('account_id', pendingDuplicate.account_id);
+    fd.append('filename', pendingDuplicate.filename);
+    if (pendingDuplicate.statement_date) fd.append('statement_date', pendingDuplicate.statement_date);
+    fd.append('transactions', JSON.stringify(pendingDuplicate.transactions));
+    fd.append('summary', JSON.stringify(pendingDuplicate.summary ?? null));
+    const pw = document.getElementById('up-password').value;
+    if (pw) fd.append('password', pw);
+    res = await fetch('/api/upload/confirm', {method:'POST', body: fd});
+  } else {
+    res = await fetch('/api/upload/confirm', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(pendingDuplicate)});
+  }
   const data = await res.json();
   hideUploadState();
   pendingUploadId = data.upload_id;
@@ -2378,8 +2402,13 @@ async function openReviewModal(uploadId) {
     debits_total: rows[0].summary_debits_total,
     new_balance: rows[0].summary_new_balance,
   } : null;
+  const storedExt = rows.length > 0 ? rows[0].stored_ext : null;
+  const docUrl = storedExt ? `/api/uploads/${uploadId}/file` : null;
 
-  _reviewCtx = { uploadId, dbRows, crRows, accountType, summary };
+  _reviewCtx = { uploadId, dbRows, crRows, accountType, summary, docUrl, docExt: storedExt };
+  const docToggle = document.getElementById('review-doc-toggle');
+  docToggle.style.display = docUrl ? 'inline-block' : 'none';
+  docToggle.textContent = reviewDocVisible ? 'Hide statement' : 'Show statement';
   selectedStagedIds.clear();
   updateStagedBar();
   document.getElementById('sbar-cat').innerHTML = '<option value="">Reassign category…</option>' +
@@ -2452,6 +2481,14 @@ function updateReconPanel() {
   if (el && _reviewCtx) el.innerHTML = reconPanelHTML(_reviewCtx.dbRows, _reviewCtx.crRows, _reviewCtx.accountType, _reviewCtx.summary);
 }
 
+let reviewDocVisible = true;
+
+function toggleReviewDoc() {
+  reviewDocVisible = !reviewDocVisible;
+  document.getElementById('review-doc-toggle').textContent = reviewDocVisible ? 'Hide statement' : 'Show statement';
+  if (_reviewCtx) renderReviewContent(_reviewCtx.dbRows, _reviewCtx.crRows, _reviewCtx.accountType);
+}
+
 function renderReviewContent(dbRows, crRows, accountType) {
   const body = document.getElementById('review-body');
   const summary = _reviewCtx ? _reviewCtx.summary : null;
@@ -2459,10 +2496,11 @@ function renderReviewContent(dbRows, crRows, accountType) {
     <div class="review-section recon-card">
       <div id="recon-panel">${reconPanelHTML(dbRows, crRows, accountType, summary)}</div>
     </div>`;
+  let inner;
   if (accountType === 'debit') {
     const dbTotal = dbRows.reduce((s, r) => s + (r.amount || 0), 0);
     const crTotal = crRows.reduce((s, r) => s + (r.amount || 0), 0);
-    body.innerHTML = `
+    inner = `
       ${reconSection}
       <div class="review-section">
         <div class="review-section-hd">
@@ -2481,7 +2519,7 @@ function renderReviewContent(dbRows, crRows, accountType) {
       </div>
     `;
   } else {
-    body.innerHTML = `
+    inner = `
       ${reconSection}
       <div class="review-section">
         <div class="review-section-hd">
@@ -2490,6 +2528,21 @@ function renderReviewContent(dbRows, crRows, accountType) {
         <div class="table-wrap">${renderStagedTable(dbRows)}</div>
       </div>
     `;
+  }
+
+  const docUrl = _reviewCtx ? _reviewCtx.docUrl : null;
+  const showDoc = !!(docUrl && reviewDocVisible);
+  body.classList.toggle('split', showDoc);
+  if (showDoc) {
+    const docPane = _reviewCtx.docExt === 'pdf'
+      ? `<embed src="${docUrl}" type="application/pdf">`
+      : `<div class="review-doc-img"><img src="${docUrl}" alt="Statement"></div>`;
+    body.innerHTML = `
+      <div class="review-pane-tx">${inner}</div>
+      <div class="review-pane-doc">${docPane}</div>
+    `;
+  } else {
+    body.innerHTML = inner;
   }
 }
 

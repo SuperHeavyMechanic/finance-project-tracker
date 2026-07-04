@@ -1,9 +1,25 @@
 import sqlite3
 import os
 import re
+import glob
 from datetime import date
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'finance.db')
+
+def _statements_dir():
+    # Derived from DB_PATH at call time so tests (which monkeypatch DB_PATH)
+    # write statement files into their temp dir, never into data/
+    return os.path.join(os.path.dirname(DB_PATH), 'statements')
+
+def statement_file_path(upload_id, ext):
+    return os.path.join(_statements_dir(), f"{upload_id}.{ext}")
+
+def _delete_statement_file(upload_id):
+    for path in glob.glob(os.path.join(_statements_dir(), f"{upload_id}.*")):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 SEED_ACCOUNTS = [
     {'owner': 'SHAN',  'name': 'CC BNI VISA GARUDA',        'bank': 'BNI',           'last_four': '3738', 'account_type': 'credit'},
@@ -121,6 +137,7 @@ def init_db():
         "ALTER TABLE uploads ADD COLUMN summary_credits_total REAL",
         "ALTER TABLE uploads ADD COLUMN summary_debits_total REAL",
         "ALTER TABLE uploads ADD COLUMN summary_new_balance REAL",
+        "ALTER TABLE uploads ADD COLUMN stored_ext TEXT",
     ]:
         try:
             conn.execute(_col_sql)
@@ -151,6 +168,18 @@ def init_db():
                 (a['owner'], a['name'], a['bank'], a['last_four'], a.get('account_type', 'credit'))
             )
     conn.commit()
+
+    # Orphan sweep: statement files exist only while their upload has staged rows
+    # (covers a crash between confirm/discard and file deletion)
+    pending = {str(r['upload_id']) for r in
+               conn.execute('SELECT DISTINCT upload_id FROM staged_transactions').fetchall()}
+    for path in glob.glob(os.path.join(_statements_dir(), '*')):
+        stem = os.path.splitext(os.path.basename(path))[0]
+        if stem not in pending:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
     conn.close()
 
 def get_accounts():
@@ -503,7 +532,8 @@ def get_statements():
     return list(result.values())
 
 
-def save_staged(account_id, filename, transactions, statement_date=None, summary=None):
+def save_staged(account_id, filename, transactions, statement_date=None, summary=None,
+                file_bytes=None, file_ext=None):
     conn = get_db()
     acct_row = conn.execute('SELECT owner FROM accounts WHERE id=?', (account_id,)).fetchone()
     default_ideal = acct_row['owner'] if acct_row else None
@@ -525,6 +555,14 @@ def save_staged(account_id, filename, transactions, statement_date=None, summary
          summary.get('debits_total'), summary.get('new_balance'))
     )
     upload_id = c.lastrowid
+
+    # Persist the (decrypted) source document while the review is pending;
+    # removed again on confirm or discard
+    if file_bytes and file_ext:
+        os.makedirs(_statements_dir(), exist_ok=True)
+        with open(statement_file_path(upload_id, file_ext), 'wb') as f:
+            f.write(file_bytes)
+        c.execute('UPDATE uploads SET stored_ext=? WHERE id=?', (file_ext, upload_id))
 
     for t in transactions:
         c.execute('''
@@ -555,7 +593,7 @@ def get_staged(upload_id):
     conn = get_db()
     rows = conn.execute('''
         SELECT s.*, a.name AS account_name, a.owner AS account_owner, a.bank, a.account_type,
-               u.statement_date, u.statement_month,
+               u.statement_date, u.statement_month, u.stored_ext,
                u.summary_prev_balance, u.summary_credits_total,
                u.summary_debits_total, u.summary_new_balance
         FROM staged_transactions s
@@ -625,10 +663,11 @@ def confirm_upload(upload_id):
             t['ideal_paid_by'],
         ))
 
-    c.execute('UPDATE uploads SET transaction_count=? WHERE id=?', (len(staged), upload_id))
+    c.execute('UPDATE uploads SET transaction_count=?, stored_ext=NULL WHERE id=?', (len(staged), upload_id))
     c.execute('DELETE FROM staged_transactions WHERE upload_id=?', (upload_id,))
     conn.commit()
     conn.close()
+    _delete_statement_file(upload_id)
     return len(staged)
 
 
@@ -638,3 +677,17 @@ def discard_upload(upload_id):
     conn.execute('DELETE FROM uploads WHERE id=?', (upload_id,))
     conn.commit()
     conn.close()
+    _delete_statement_file(upload_id)
+
+
+def get_upload_file(upload_id):
+    """Return (path, ext) for a pending upload's stored document, or None."""
+    conn = get_db()
+    row = conn.execute('SELECT stored_ext FROM uploads WHERE id=?', (upload_id,)).fetchone()
+    conn.close()
+    if not row or not row['stored_ext']:
+        return None
+    path = statement_file_path(upload_id, row['stored_ext'])
+    if not os.path.exists(path):
+        return None
+    return path, row['stored_ext']
