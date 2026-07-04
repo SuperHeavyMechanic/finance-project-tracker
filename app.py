@@ -60,13 +60,38 @@ def period_to_statement_date(period_str):
             return f"{last_day:02d}/{m:02d}/{y}"
     return None
 
+def _normalize_summary(raw, account_type):
+    """Map printed statement figures to the generic uploads.summary_* columns."""
+    if not isinstance(raw, dict):
+        return None
+    if account_type == 'debit':
+        keymap = {'prev_balance': 'opening_balance', 'credits_total': 'total_credits',
+                  'debits_total': 'total_debits', 'new_balance': 'closing_balance'}
+    else:
+        keymap = {'prev_balance': 'previous_balance', 'credits_total': 'total_payments_credits',
+                  'debits_total': 'total_new_transactions', 'new_balance': 'new_balance'}
+    out = {}
+    for generic, source in keymap.items():
+        v = raw.get(source)
+        try:
+            out[generic] = float(v) if v is not None else None
+        except (TypeError, ValueError):
+            out[generic] = None
+    return out if any(v is not None for v in out.values()) else None
+
+
 def build_extraction_prompt(rules_section='', bank_notes=''):
     notes_block = f'\n\n{bank_notes}' if bank_notes else ''
     rules_block = f'\n\n{rules_section}' if rules_section else ''
     return f"""You are a financial data extraction assistant. Analyze this credit card statement and extract every transaction line item.{notes_block}{rules_block}
 
-Return a JSON object with exactly two top-level fields:
+Return a JSON object with exactly three top-level fields:
 - statement_date: the billing cycle end date or statement date as printed on the statement (keep original format), or null if not found
+- summary: the printed summary figures from the statement (numeric IDR, no symbols or commas; null for any figure not printed):
+  - previous_balance: previous balance / tagihan bulan lalu
+  - total_payments_credits: total payments + credits received this cycle (positive number)
+  - total_new_transactions: total new transactions/purchases this cycle as printed (e.g. total transaksi baru)
+  - new_balance: new balance / total tagihan
 - transactions: an array of objects with these exact fields:
   - date: transaction date string (keep original format from statement)
   - description: merchant/payee name, clean and readable
@@ -84,6 +109,7 @@ Rules:
 Example:
 {{
   "statement_date": "31/10/2024",
+  "summary": {{"previous_balance": 5000000, "total_payments_credits": 5000000, "total_new_transactions": 4800000, "new_balance": 4800000}},
   "transactions": [
     {{"date": "01/10/2024", "description": "GRAB", "amount": 45000, "currency": "IDR", "original_amount": null, "original_currency": null, "category": "TRANSPORTATION", "is_real_expense": true}},
     {{"date": "02/10/2024", "description": "NETFLIX", "amount": 154000, "currency": "IDR", "original_amount": 9.99, "original_currency": "USD", "category": "ENTERTAINMENT", "is_real_expense": true}},
@@ -96,8 +122,13 @@ def build_debit_extraction_prompt(rules_section='', bank_notes=''):
     rules_block = f'\n\n{rules_section}' if rules_section else ''
     return f"""You are a financial data extraction assistant. Analyze this debit/bank statement and extract every transaction.{notes_block}{rules_block}
 
-Return a JSON object with exactly two top-level fields:
+Return a JSON object with exactly three top-level fields:
 - period: the statement period as printed (e.g. "APRIL 2026")
+- summary: the printed summary figures from the statement (numeric IDR, no symbols or commas; null for any figure not printed):
+  - opening_balance: opening balance / saldo awal
+  - total_credits: total credits/incoming (mutasi kredit) for the period
+  - total_debits: total debits/outgoing (mutasi debet) for the period
+  - closing_balance: closing balance / saldo akhir
 - transactions: an array of objects with these exact fields:
   - date: transaction date as DD/MM/YYYY — use the year from the period (e.g. "01/04/2026" for APRIL 2026)
   - description: clean, readable merchant/payee name
@@ -113,6 +144,7 @@ Rules:
 Example:
 {{
   "period": "APRIL 2026",
+  "summary": {{"opening_balance": 12500000, "total_credits": 8000000, "total_debits": 9200000, "closing_balance": 11300000}},
   "transactions": [
     {{"date": "01/04/2026", "description": "Arya valet", "amount": 30000, "transaction_type": "DB", "category": "TRANSPORTATION", "is_real_expense": true}},
     {{"date": "03/04/2026", "description": "Transfer from FAHMIANDINI KHOIRU – Keg Azana 1 s.d 3 April", "amount": 560000, "transaction_type": "CR", "category": "OTHERS", "is_real_expense": false}}
@@ -230,8 +262,10 @@ def api_upload():
         if isinstance(parsed, list):
             extracted = parsed
             statement_date = None
+            summary = None
         else:
             extracted = parsed.get('transactions', [])
+            summary = _normalize_summary(parsed.get('summary'), account_type)
             if account_type == 'debit':
                 period = parsed.get('period')
                 statement_date = period_to_statement_date(period) if period else None
@@ -251,9 +285,10 @@ def api_upload():
                 'statement_date': statement_date,
                 'transactions': extracted,
                 'count': len(extracted),
+                'summary': summary,
             })
 
-        upload_id, stmt_month = save_staged(account_id, filename, extracted, statement_date=statement_date)
+        upload_id, stmt_month = save_staged(account_id, filename, extracted, statement_date=statement_date, summary=summary)
         return jsonify({'success': True, 'staged': True, 'upload_id': upload_id, 'count': len(extracted), 'statement_month': stmt_month})
 
     except json.JSONDecodeError as e:
@@ -270,6 +305,7 @@ def api_upload_confirm():
     upload_id, stmt_month = save_staged(
         data['account_id'], data.get('filename', 'statement'), data.get('transactions', []),
         statement_date=data.get('statement_date'),
+        summary=data.get('summary'),
     )
     return jsonify({'success': True, 'staged': True, 'upload_id': upload_id, 'count': len(data.get('transactions', [])), 'statement_month': stmt_month})
 

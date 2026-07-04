@@ -205,6 +205,29 @@ class TestCategoryValidation:
         assert 'Invalid category' in resp.get_json()['error']
 
 
+class TestStatementSummary:
+    """save_staged() must persist printed summary figures; get_staged() must expose them."""
+
+    def test_summary_roundtrip(self, fresh_db):
+        acc_id = _account()
+        summary = {'prev_balance': 5000000, 'credits_total': 5000000,
+                   'debits_total': 4800000, 'new_balance': 4800000}
+        upload_id, _ = db.save_staged(acc_id, 'test.pdf', [_tx()],
+                                      statement_date='30/04/2026', summary=summary)
+        rows = db.get_staged(upload_id)
+        assert rows[0]['summary_prev_balance'] == 5000000
+        assert rows[0]['summary_credits_total'] == 5000000
+        assert rows[0]['summary_debits_total'] == 4800000
+        assert rows[0]['summary_new_balance'] == 4800000
+
+    def test_summary_defaults_to_null(self, fresh_db):
+        acc_id = _account()
+        upload_id, _ = db.save_staged(acc_id, 'test.pdf', [_tx()], statement_date='30/04/2026')
+        rows = db.get_staged(upload_id)
+        assert rows[0]['summary_prev_balance'] is None
+        assert rows[0]['summary_new_balance'] is None
+
+
 class TestSettings:
     def test_get_missing_setting_returns_none(self, fresh_db):
         assert db.get_setting('monthly_budget') is None

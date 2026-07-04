@@ -117,6 +117,10 @@ def init_db():
         "ALTER TABLE transactions ADD COLUMN ideal_paid_by TEXT",
         "ALTER TABLE staged_transactions ADD COLUMN ideal_paid_by TEXT",
         "ALTER TABLE accounts ADD COLUMN account_type TEXT DEFAULT 'credit'",
+        "ALTER TABLE uploads ADD COLUMN summary_prev_balance REAL",
+        "ALTER TABLE uploads ADD COLUMN summary_credits_total REAL",
+        "ALTER TABLE uploads ADD COLUMN summary_debits_total REAL",
+        "ALTER TABLE uploads ADD COLUMN summary_new_balance REAL",
     ]:
         try:
             conn.execute(_col_sql)
@@ -499,7 +503,7 @@ def get_statements():
     return list(result.values())
 
 
-def save_staged(account_id, filename, transactions, statement_date=None):
+def save_staged(account_id, filename, transactions, statement_date=None, summary=None):
     conn = get_db()
     acct_row = conn.execute('SELECT owner FROM accounts WHERE id=?', (account_id,)).fetchone()
     default_ideal = acct_row['owner'] if acct_row else None
@@ -509,11 +513,16 @@ def save_staged(account_id, filename, transactions, statement_date=None):
         (t.get('amount') or 0) for t in transactions
         if (t.get('amount') or 0) > 0 and t.get('transaction_type', 'DB') == 'DB'
     )
+    summary = summary or {}
 
     c = conn.cursor()
     c.execute(
-        'INSERT INTO uploads (account_id, filename, statement_month, transaction_count, statement_date, original_total_amount) VALUES (?,?,?,?,?,?)',
-        (account_id, filename, stmt_month, len(transactions), statement_date, original_total)
+        '''INSERT INTO uploads (account_id, filename, statement_month, transaction_count, statement_date, original_total_amount,
+                                summary_prev_balance, summary_credits_total, summary_debits_total, summary_new_balance)
+           VALUES (?,?,?,?,?,?,?,?,?,?)''',
+        (account_id, filename, stmt_month, len(transactions), statement_date, original_total,
+         summary.get('prev_balance'), summary.get('credits_total'),
+         summary.get('debits_total'), summary.get('new_balance'))
     )
     upload_id = c.lastrowid
 
@@ -546,7 +555,9 @@ def get_staged(upload_id):
     conn = get_db()
     rows = conn.execute('''
         SELECT s.*, a.name AS account_name, a.owner AS account_owner, a.bank, a.account_type,
-               u.statement_date, u.statement_month
+               u.statement_date, u.statement_month,
+               u.summary_prev_balance, u.summary_credits_total,
+               u.summary_debits_total, u.summary_new_balance
         FROM staged_transactions s
         JOIN accounts a ON a.id = s.account_id
         JOIN uploads u ON u.id = s.upload_id

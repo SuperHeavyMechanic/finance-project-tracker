@@ -525,6 +525,15 @@
       .cov-cell:hover { background: var(--accent-soft); }
       .cov-missing:hover .cov-plus { color: var(--accent); }
     }
+    /* ── RECONCILIATION PANEL (review modal) ── */
+    .recon-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 18px; box-shadow: var(--shadow-sm); margin-bottom: 20px; }
+    .recon-row { font-size: 13px; color: var(--ink-2); padding: 5px 0; border-top: 1px solid var(--line); }
+    .recon-row:first-of-type { border-top: none; }
+    .recon-row strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+    .recon-badge { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: var(--r-pill); font-size: 11px; font-weight: 700; }
+    .recon-badge.ok { background: var(--success-soft); color: var(--success); }
+    .recon-badge.warn { background: var(--warning-soft); color: var(--warning-ink); }
+
     tr.stmt-row-flash td { animation: stmtFlash 1.6s var(--ease-out); }
     @keyframes stmtFlash {
       0%, 35% { background-color: var(--accent-soft); }
@@ -2284,7 +2293,7 @@ async function doUpload() {
     if (data.error) { showError('up-error', data.error); return; }
 
     if (data.duplicate) {
-      pendingDuplicate = {account_id: +document.getElementById('up-account').value, filename: stagedFile.name, transactions: data.transactions, statement_date: data.statement_date || null};
+      pendingDuplicate = {account_id: +document.getElementById('up-account').value, filename: stagedFile.name, transactions: data.transactions, statement_date: data.statement_date || null, summary: data.summary || null};
       document.getElementById('up-duplicate-msg').textContent =
         `You've already uploaded a statement for ${fmtMonth(data.statement_month)} on this account. Upload anyway and merge?`;
       document.getElementById('up-duplicate').style.display = 'block';
@@ -2363,8 +2372,14 @@ async function openReviewModal(uploadId) {
   const stmtMonth = rows.length > 0 ? rows[0].statement_month : '';
   const dbRows = rows.filter(r => r.transaction_type === 'DB');
   const crRows = rows.filter(r => r.transaction_type === 'CR');
+  const summary = rows.length > 0 ? {
+    prev_balance: rows[0].summary_prev_balance,
+    credits_total: rows[0].summary_credits_total,
+    debits_total: rows[0].summary_debits_total,
+    new_balance: rows[0].summary_new_balance,
+  } : null;
 
-  _reviewCtx = { uploadId, dbRows, crRows, accountType };
+  _reviewCtx = { uploadId, dbRows, crRows, accountType, summary };
   selectedStagedIds.clear();
   updateStagedBar();
   document.getElementById('sbar-cat').innerHTML = '<option value="">Reassign category…</option>' +
@@ -2382,12 +2397,73 @@ async function openReviewModal(uploadId) {
   renderReviewContent(dbRows, crRows, accountType);
 }
 
+// Reconciliation vs the statement's printed figures. Tolerance Rp 1 for rounding.
+function reconPanelHTML(dbRows, crRows, accountType, s) {
+  const TOL = 1;
+  const has = v => v !== null && v !== undefined;
+  const pm = (label, val) => `<div class="pm-item"><div class="pm-label">${label}</div><div class="pm-val">${val}</div></div>`;
+  const badge = delta => Math.abs(delta) <= TOL
+    ? `<span class="recon-badge ok">✓ matches statement</span>`
+    : `<span class="recon-badge warn">⚠ off by ${fmtAmount(delta)}</span>`;
+
+  let boxes = '', checks = '';
+
+  if (accountType === 'debit') {
+    const extractedDb = dbRows.reduce((a, r) => a + (r.amount || 0), 0);
+    const extractedCr = crRows.reduce((a, r) => a + (r.amount || 0), 0);
+    boxes = pm('Money out (extracted)', fmtAmount(extractedDb)) + pm('Money in (extracted)', fmtAmount(extractedCr));
+    if (has(s?.debits_total)) {
+      checks += `<div class="recon-row">Money out vs printed <strong>${fmtAmount(s.debits_total)}</strong> ${badge(extractedDb - s.debits_total)}</div>`;
+    }
+    if (has(s?.credits_total)) {
+      checks += `<div class="recon-row">Money in vs printed <strong>${fmtAmount(s.credits_total)}</strong> ${badge(extractedCr - s.credits_total)}</div>`;
+    }
+    if (has(s?.prev_balance) && has(s?.credits_total) && has(s?.debits_total) && has(s?.new_balance)) {
+      const computed = s.prev_balance + s.credits_total - s.debits_total;
+      checks += `<div class="recon-row">Opening ${fmtAmount(s.prev_balance)} + in − out = <strong>${fmtAmount(computed)}</strong>,
+        printed closing <strong>${fmtAmount(s.new_balance)}</strong> ${badge(computed - s.new_balance)}</div>`;
+    }
+  } else {
+    const purchases = dbRows.filter(r => (r.amount || 0) > 0).reduce((a, r) => a + r.amount, 0);
+    const refunds   = dbRows.filter(r => (r.amount || 0) < 0 && r.is_real_expense).reduce((a, r) => a + r.amount, 0);
+    const payments  = dbRows.filter(r => (r.amount || 0) < 0 && !r.is_real_expense).reduce((a, r) => a + r.amount, 0);
+    const extractedNew = purchases + refunds;
+    boxes = pm('New transactions (extracted)', fmtAmount(extractedNew));
+    if (refunds) boxes += pm('· incl. refunds', fmtAmount(refunds));
+    if (payments) boxes += pm('Payments — not expenses', fmtAmount(payments));
+    if (has(s?.debits_total)) {
+      checks += `<div class="recon-row">New transactions vs printed <strong>${fmtAmount(s.debits_total)}</strong> ${badge(extractedNew - s.debits_total)}</div>`;
+    }
+    if (has(s?.prev_balance) && has(s?.credits_total) && has(s?.new_balance)) {
+      const computed = s.prev_balance - s.credits_total + (has(s?.debits_total) ? s.debits_total : extractedNew);
+      checks += `<div class="recon-row">Prev balance ${fmtAmount(s.prev_balance)} − payments ${fmtAmount(s.credits_total)} + new = <strong>${fmtAmount(computed)}</strong>,
+        printed total tagihan <strong>${fmtAmount(s.new_balance)}</strong> ${badge(computed - s.new_balance)}</div>`;
+    }
+  }
+
+  if (!checks) {
+    checks = `<div class="recon-row" style="color:var(--ink-3);">No printed totals found on this statement — showing extracted subtotals only.</div>`;
+  }
+  return `<div class="preview-meta" style="margin-bottom:10px;">${boxes}</div>${checks}`;
+}
+
+function updateReconPanel() {
+  const el = document.getElementById('recon-panel');
+  if (el && _reviewCtx) el.innerHTML = reconPanelHTML(_reviewCtx.dbRows, _reviewCtx.crRows, _reviewCtx.accountType, _reviewCtx.summary);
+}
+
 function renderReviewContent(dbRows, crRows, accountType) {
   const body = document.getElementById('review-body');
+  const summary = _reviewCtx ? _reviewCtx.summary : null;
+  const reconSection = `
+    <div class="review-section recon-card">
+      <div id="recon-panel">${reconPanelHTML(dbRows, crRows, accountType, summary)}</div>
+    </div>`;
   if (accountType === 'debit') {
     const dbTotal = dbRows.reduce((s, r) => s + (r.amount || 0), 0);
     const crTotal = crRows.reduce((s, r) => s + (r.amount || 0), 0);
     body.innerHTML = `
+      ${reconSection}
       <div class="review-section">
         <div class="review-section-hd">
           <span class="badge badge-db">Money Out (DB)</span>
@@ -2405,11 +2481,11 @@ function renderReviewContent(dbRows, crRows, accountType) {
       </div>
     `;
   } else {
-    const total = dbRows.reduce((s, r) => s + (r.amount || 0), 0);
     body.innerHTML = `
+      ${reconSection}
       <div class="review-section">
         <div class="review-section-hd">
-          <span class="summary">${dbRows.length} transactions · ${fmtAmount(total)}</span>
+          <span class="summary">${dbRows.length} transactions</span>
         </div>
         <div class="table-wrap">${renderStagedTable(dbRows)}</div>
       </div>
@@ -2508,6 +2584,11 @@ async function patchStagedRow(txId, fields, el, badgeClass, classMap) {
     const prefix = typeof classMap === 'object' ? (classMap[val] || '') : classMap + val;
     el.className = `inline-select ${badgeClass} ${prefix}`;
   }
+  if (_reviewCtx) {
+    const row = _reviewCtx.dbRows.find(r => r.id === txId);
+    if (row) Object.assign(row, fields);
+    if ('amount' in fields || 'is_real_expense' in fields) updateReconPanel();
+  }
 }
 
 async function deleteStagedRow(txId) {
@@ -2516,6 +2597,7 @@ async function deleteStagedRow(txId) {
   if (row) row.remove();
   selectedStagedIds.delete(txId);
   if (_reviewCtx) _reviewCtx.dbRows = _reviewCtx.dbRows.filter(r => r.id !== txId);
+  updateReconPanel();
   updateStagedBar();
 }
 
