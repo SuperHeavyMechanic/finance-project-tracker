@@ -43,7 +43,7 @@
       --success-soft-border: #C4E5D2;
       --warning-ink: #8A6116;
       --warning-soft: #F6ECD4;
-      --manual: #C2660A;
+      --manual: #E0891E;
 
       /* color · owners */
       --owner-shan: #2563EB;   --owner-shan-soft: #E4ECFC;   --owner-shan-ink: #1D4ED8;
@@ -527,9 +527,9 @@
     .coverage-tbl tbody tr:last-child td { border-bottom: none; }
     .cov-acc { padding: 10px 14px; white-space: nowrap; font-weight: 500; }
     .cov-cell { text-align: center; width: 84px; min-width: 72px; padding: 10px 8px; cursor: pointer; font-size: 14px; transition: background-color var(--dur-fast) ease; }
-    .cov-ok { color: var(--success); font-weight: 700; }
+    .cov-ok { color: var(--success); font-weight: 700; font-size: 15px; }
     .cov-pending { background: var(--warning-soft); }
-    .cov-manual { color: var(--manual); font-weight: 700; }
+    .cov-manual { color: var(--manual); font-weight: 700; font-size: 15px; }
     .cov-missing .cov-plus { color: var(--line-strong); font-size: 16px; font-weight: 600; transition: color var(--dur-fast) ease; }
     @media (hover: hover) and (pointer: fine) {
       .cov-cell:hover { background: var(--accent-soft); }
@@ -2142,7 +2142,7 @@ function renderCoverageMatrix(data, manualRows) {
       if (!hit) {
         if (manualSet.has(`${acc.id}|${m}`)) {
           return `<td class="cov-cell cov-manual" title="Entered manually — click to change"
-                      onclick="openCoverageChoice(${acc.id},'${m}',true)">✓</td>`;
+                      onclick="openCoverageChoice(${acc.id},'${m}',true)">✔</td>`;
         }
         return `<td class="cov-cell cov-missing" title="No statement for ${fmtMonth(m)} — click to record"
                     onclick="openCoverageChoice(${acc.id},'${m}',false)"><span class="cov-plus">+</span></td>`;
@@ -2152,7 +2152,7 @@ function renderCoverageMatrix(data, manualRows) {
                     onclick="openReviewModal(${hit.upload.id})">⏳</td>`;
       }
       return `<td class="cov-cell cov-ok" title="Uploaded — click to see details"
-                  onclick="jumpToStatementRow(${hit.upload.id})">✓</td>`;
+                  onclick="jumpToStatementRow(${hit.upload.id})">✔</td>`;
     }).join('');
     return `<tr>
       <td class="cov-acc">${ownerBadge(acc.owner)} <span>${esc(acc.name)}</span></td>
@@ -2162,8 +2162,8 @@ function renderCoverageMatrix(data, manualRows) {
 
   el.innerHTML = `<div style="margin-bottom:32px;">
     <div class="cov-legend">
-      <span><span class="cov-legend-dot cov-ok">✓</span> Uploaded</span>
-      <span><span class="cov-legend-dot cov-manual">✓</span> Entered manually</span>
+      <span><span class="cov-legend-dot cov-ok">✔</span> Uploaded</span>
+      <span><span class="cov-legend-dot cov-manual">✔</span> Entered manually</span>
       <span><span class="cov-legend-dot cov-pending">⏳</span> Pending review</span>
       <span><span class="cov-legend-dot cov-missing">+</span> Missing</span>
     </div>
