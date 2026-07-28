@@ -24,7 +24,6 @@ def _delete_statement_file(upload_id):
 SEED_ACCOUNTS = [
     {'owner': 'SHAN',  'name': 'CC BNI VISA GARUDA',        'bank': 'BNI',           'last_four': '3738', 'account_type': 'credit'},
     {'owner': 'SHAN',  'name': 'CC MANDIRI VISA SIGNATURE',  'bank': 'Mandiri',        'last_four': '5856', 'account_type': 'credit'},
-    {'owner': 'JOINT', 'name': 'CC JENIUS',                  'bank': 'Jenius (BTPN)',  'last_four': '9XXX', 'account_type': 'credit'},
     {'owner': 'SHAN',  'name': 'BCA Rekening Tahapan',       'bank': 'BCA',            'last_four': '4980', 'account_type': 'debit'},
     {'owner': 'SHAN',  'name': 'Cash',                       'bank': 'CASH',           'last_four': 'SHAN', 'account_type': 'cash'},
     {'owner': 'JOINT', 'name': 'Cash',                       'bank': 'CASH',           'last_four': 'JOINT','account_type': 'cash'},
