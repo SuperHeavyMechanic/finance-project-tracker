@@ -26,7 +26,7 @@ pytest tests/test_db.py -v    # verbose output
 pytest -k "TestParseDate"     # run a single test class
 ```
 
-Tests use an in-memory SQLite DB via `monkeypatch` on `db.DB_PATH` — `data/finance.db` is never touched. All test fixtures are in `tests/test_db.py`.
+Tests point `db.DB_PATH` at a throwaway file under pytest's `tmp_path` via `monkeypatch` — `data/finance.db` is never touched. Two fixtures, both in `tests/test_db.py` (there is no `conftest.py`): `fresh_db` for direct db-layer calls, and `client` for Flask test-client calls against the real routes (`TestManualCoverageApi`, `TestBudgetApi`). `db.DB_PATH` is the single switch for which database the whole app talks to — reassigning it before importing `app` is also how to run the server against a copy of the real DB.
 
 ## Environment
 
@@ -36,8 +36,10 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ## Architecture
 
-Four Python files + one HTML file. No build step. `static/` holds the favicon/app-icon
+Three modules at the repo root — `app.py` (routes), `db.py` (all SQL), `rules.py` (prompt
+customisation) — plus one HTML file. No build step. `static/` holds the favicon/app-icon
 assets Flask serves at `/static/*` (default Flask static config, no custom wiring in `app.py`).
+`branding/` holds two standalone icon-generation scripts that the app never imports.
 
 **`db.py`** — all database logic (SQLite via `sqlite3`). Key functions:
 - `init_db()` — creates tables, runs `ALTER TABLE` migrations, seeds missing accounts from `SEED_ACCOUNTS` (per-account upsert by `bank + last_four`); also sweeps orphaned statement files from `data/statements/`
@@ -75,13 +77,13 @@ The three `_ALLOWED_*` frozensets at module level are the authoritative whitelis
 - Duplicate detection runs before staging; returns `{duplicate:true}` with in-memory transactions so frontend can confirm
 - All write endpoints that accept `category` validate it against the `CATEGORIES` list before calling db functions
 
-**`templates/index.html`** — single-file SPA (~2900 lines). Vanilla JS, no chart library (the trend is drawn with CSS flex bars; Chart.js was removed). Five views via `navigate(view)` (Dashboard, Transactions, Settlements, Accounts, Statements — uploading lives in a modal on Statements). Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `selectedStagedIds` (Set), `_reviewCtx`, `pendingUploadId`, `pendingDuplicate`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`. Dashboard state: `dashOwner`, `_dashData`, `dashMonth`, `dashCat`, `dashRows`, `dashChecked` (Set), `dashSort`, `dashQuery`, `dashEditId`, `dashHoverCat`, `dashBulkCat`, `_dashUndo`.
+**`templates/index.html`** — single-file SPA (~3400 lines). Vanilla JS, no chart library (the trend is drawn with CSS flex bars; Chart.js was removed). Five views via `navigate(view)` (Dashboard, Transactions, Settlements, Accounts, Statements — uploading lives in a modal on Statements). Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `selectedStagedIds` (Set), `_reviewCtx`, `pendingUploadId`, `pendingDuplicate`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`. Dashboard state: `dashOwner`, `_dashData`, `dashMonth`, `dashCat`, `dashRows`, `dashChecked` (Set), `dashSort`, `dashQuery`, `dashEditId`, `dashHoverCat`, `dashBulkCat`, `_dashUndo`.
 
 ## Data Model
 
-Five tables in `data/finance.db` (gitignored):
+Six tables in `data/finance.db` (gitignored):
 
-- **`accounts`** — seeded from `SEED_ACCOUNTS` (6 accounts: 3 credit, 1 debit, 2 cash); also manageable via UI CRUD. `owner` ∈ {SHAN, JANICE, JOINT}; `account_type` ∈ {credit, debit, cash}
+- **`accounts`** — seeded from `SEED_ACCOUNTS` (5 accounts: 2 credit, 1 debit, 2 cash); also manageable via UI CRUD. `owner` ∈ {SHAN, JANICE, JOINT}; `account_type` ∈ {credit, debit, cash}
 - **`uploads`** — one row per statement; `statement_month` (YYYY-MM) derived from `statement_date` (billing date in **original PDF format**, not ISO); survives confirm, deleted on discard. Also holds the printed summary figures (`summary_prev_balance`, `summary_credits_total`, `summary_debits_total`, `summary_new_balance` — credit: prev balance / payments+credits / new transactions / total tagihan; debit: opening / mutasi kredit / mutasi debet / closing) and `stored_ext` (extension of the persisted source file in `data/statements/`, NULL once confirmed/discarded)
 - **`staged_transactions`** — pure buffer; holds extracted rows pending review; cleared entirely on every confirm or discard; `transaction_type` ∈ {DB, CR} (CR rows shown for context in debit review but never confirmed)
 - **`transactions`** — confirmed rows only; never contains staged or CR data; all downstream views read only this table. `upload_id` is NULL for manually-added transactions.
@@ -166,7 +168,11 @@ All dates displayed as **DD-Mmm-YY** (e.g. `20-Apr-26`).
 
 `statement_date` in the DB is stored in the **original PDF format** (e.g. `"11/04/2026"`), not ISO. Always use `parseStatementDateLabel` to display it, never `fmtDate` directly.
 
-Statement month is always derived from the **billing date** on the PDF (credit) or the **last day of the printed period** (debit), never from the dominant transaction date.
+Statement month is derived from the **billing date** on the PDF (credit) or the **last day of
+the printed period** (debit). Only when that date is missing or unparseable does it fall back to
+`_dominant_month(transactions)` — the most common month among the extracted rows. Treat that
+fallback as a symptom: if a statement lands in the wrong month, the bank's date format probably
+needs a `BANK_NOTES` entry rather than a fix downstream.
 
 ## API Routes
 
