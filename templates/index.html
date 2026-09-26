@@ -9,7 +9,6 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
   <link rel="shortcut icon" href="/static/favicon.ico" />
   <meta name="theme-color" content="#23211C" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     /* ════════════════════════════════════════════════════════════════
        DESIGN TOKENS — see DESIGN-SYSTEM.md (repo root) for the spec
@@ -109,67 +108,145 @@
     .owner-tab[data-owner="JOINT"].active  { background: var(--owner-joint); border-color: var(--owner-joint); color: #fff; }
 
     /* ── DASHBOARD ── */
-    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 28px; max-width: 880px; }
-    .summary-card { border-radius: var(--r-md); padding: 16px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow-sm); }
-    .summary-card.total { background: var(--header-bg); color: var(--header-ink); border-color: var(--header-bg); }
-    .summary-card .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); margin-bottom: 6px; }
-    .summary-card.total .label { color: rgba(246,245,241,.55); }
-    .summary-card .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .summary-card .sub { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
-    .summary-card.total .sub { color: rgba(246,245,241,.5); }
-    .summary-card .delta { font-size: 12px; font-weight: 600; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    /* The dashboard is a full-height two-pane workspace: a head strip carries the
+       month total / target readout that used to live in summary cards, and both
+       panes fill the viewport so the transaction list scrolls inside its own card. */
+    #view-dashboard.view.active { display: flex; flex-direction: column; gap: 16px; }
+
+    .dash-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .dash-title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+    .dash-head .owner-tabs { margin-bottom: 0; gap: 6px; }
+    .dash-head .owner-tab { padding: 6px 14px; }
+    .dash-spacer { flex: 1; }
+    .dash-stats { display: flex; align-items: center; gap: 20px; font-size: 13px; color: var(--ink-2); flex-wrap: wrap; }
+    .dash-stat { display: flex; gap: 6px; align-items: center; }
+    .dash-stat-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--ink-3); white-space: nowrap; }
+    .dash-stat-value { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .dash-stat-delta { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .delta-up { color: var(--danger); }
     .delta-down { color: var(--success); }
     .delta-flat { color: var(--ink-3); }
-    /* readable tints on the dark total card */
-    .summary-card.total .delta-up { color: #F2A48F; }
-    .summary-card.total .delta-down { color: #8FD7B5; }
-    .summary-card.total .delta-flat { color: rgba(246,245,241,.5); }
-    .budget-scope { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--ink-3); margin-left: 6px; font-size: 11px; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 8px; }
-    .budget-edit-btn { background: none; border: none; cursor: pointer; color: var(--ink-3); font-size: 12px; padding: 2px 4px; float: right; transition: color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
-    .budget-edit-btn:active { transform: scale(0.96); }
-    .budget-of { font-size: 12px; font-weight: 500; color: var(--ink-3); }
-    .budget-bar { position: relative; height: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); margin-top: 10px; overflow: hidden; }
-    .budget-fill { height: 100%; background: var(--accent); border-radius: var(--r-pill); transition: width var(--dur-base) var(--ease-out); }
-    .budget-fill.over { background: var(--danger); }
+    .dash-target-bar { position: relative; width: 88px; height: 6px; border-radius: 3px; background: var(--surface-sunken); border: 1px solid var(--line); overflow: hidden; }
+    .dash-target-fill { height: 100%; background: var(--accent); transition: width var(--dur-base) var(--ease-out); }
+    .dash-target-fill.over { background: var(--danger); }
+    .dash-target-text { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .dash-target-input { width: 128px; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); font-size: 13px; font-variant-numeric: tabular-nums; outline: none; background: var(--surface); }
+    .dash-target-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
     .pace-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink-2); }
-    .budget-edit-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
-    .budget-edit-row input { flex: 1; min-width: 0; }
-    .dash-chart-row { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 28px; }
-    .chart-wrap { background: var(--surface); border-radius: var(--r-lg); border: 1px solid var(--line); padding: 24px; flex: 0 0 65%; min-width: 0; box-shadow: var(--shadow-sm); }
-    .breakdown-panel { flex: 0 0 calc(35% - 16px); background: var(--surface); border-radius: var(--r-lg); border: 1px solid var(--line); padding: 20px; min-width: 0; min-height: 200px; box-shadow: var(--shadow-sm); }
-    .breakdown-panel .bp-header { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
-    .breakdown-panel .bp-sub { font-size: 11px; color: var(--ink-3); margin-bottom: 16px; }
-    .breakdown-panel .bp-hint { font-size: 12px; color: var(--ink-3); text-align: center; margin-top: 40px; }
-    .bp-header-row, .bp-row { display: grid; grid-template-columns: 1fr 40px 92px 30px 54px 20px; gap: 8px; align-items: center; }
-    .bp-header-row { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-    .bp-header-row > * { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); }
-    .bp-row { margin-bottom: 10px; }
-    .bp-bar-wrap { height: 6px; background: var(--surface-sunken); border-radius: 3px; overflow: hidden; }
-    .bp-bar { height: 100%; border-radius: 3px; }
-    .bp-label { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .bp-amount { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
-    .bp-pct { font-size: 11px; color: var(--ink-3); text-align: right; }
-    .bp-source { text-align: center; }
-    .bp-edit-btn { background: none; border: none; cursor: pointer; color: var(--ink-3); font-size: 13px; padding: 0; line-height: 1; transition: color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
-    .bp-edit-btn:active { transform: scale(0.92); }
+    .budget-scope { font-weight: 500; letter-spacing: 0; color: var(--ink-3); font-size: 11px; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 8px; }
+    .budget-edit-btn { background: none; border: none; cursor: pointer; color: var(--ink-3); font-size: 12px; padding: 2px 4px; transition: color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
+    .budget-edit-btn:active { transform: scale(0.96); }
     @media (hover: hover) and (pointer: fine) {
-      .bp-edit-btn:hover { color: var(--accent); }
+      .budget-edit-btn:hover { color: var(--accent); }
     }
-    .bp-edit-form { background: var(--surface-sunken); border-radius: var(--r-md); padding: 12px; margin-bottom: 10px; display: none; }
-    .bp-edit-form.open { display: block; opacity: 1; transform: none; transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out); }
-    .bp-edit-form label { font-size: 11px; font-weight: 600; color: var(--ink-2); display: block; margin-bottom: 3px; }
-    .bp-edit-form input, .bp-edit-form select { width: 100%; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: 6px 8px; font-size: 13px; margin-bottom: 8px; background: var(--surface); }
-    .bp-edit-actions { display: flex; gap: 8px; justify-content: flex-end; }
-    .bp-save-btn { background: var(--accent); color: #fff; border: none; border-radius: var(--r-sm); padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background-color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
-    .bp-save-btn:active { transform: scale(0.96); }
+
+    .dash-grid { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+    .dash-col-chart { flex: 3 1 560px; min-width: 0; }
+    .dash-col-panel { flex: 2 1 460px; min-width: 0; position: sticky; top: 74px; }
+    .dash-card { display: flex; flex-direction: column; height: calc(100vh - 170px); min-height: 520px; }
+
+    /* ── DASHBOARD · TREND (CSS-drawn stacked bars, no chart library) ── */
+    .trend-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+    .trend-title { font-size: 14px; font-weight: 600; }
+    .trend-hint { font-size: 12px; color: var(--ink-3); }
+    .trend-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; flex: 1; min-height: 0; }
+    .trend-month { cursor: pointer; display: flex; flex-direction: column; gap: 6px; padding: 8px 6px 6px; border-radius: var(--r-btn); background: transparent; transition: background-color var(--dur-fast) ease; }
+    .trend-month.active { background: var(--accent-soft); }
     @media (hover: hover) and (pointer: fine) {
-      .bp-save-btn:hover { background: var(--accent-strong); }
+      .trend-month:not(.active):hover { background: var(--surface-hover); }
     }
-    .bp-cancel-btn { background: none; border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: 5px 14px; font-size: 12px; cursor: pointer; color: var(--ink-2); transition: background-color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
-    .bp-cancel-btn:active { transform: scale(0.96); }
+    .trend-total { font-size: 12px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-3); }
+    .trend-month.active .trend-total { color: var(--accent-strong); }
+    .trend-bar-area { flex: 1; min-height: 160px; display: flex; flex-direction: column; justify-content: flex-end; }
+    .trend-bar { display: flex; flex-direction: column-reverse; gap: 1px; border-radius: 3px; overflow: hidden; }
+    .trend-seg { min-height: 4px; cursor: pointer; transition: opacity var(--dur-fast) ease; }
     @media (hover: hover) and (pointer: fine) {
-      .bp-cancel-btn:hover { background: var(--surface-hover); }
+      .trend-seg:hover { opacity: 1 !important; }
+    }
+    .trend-month-label { font-size: 13px; text-align: center; color: var(--ink-2); }
+    .trend-month.active .trend-month-label { font-weight: 700; color: var(--ink); }
+    .trend-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .trend-legend-item { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--ink-2); transition: color var(--dur-fast) ease; }
+    .trend-legend-item.active { font-weight: 700; color: var(--ink); }
+    @media (hover: hover) and (pointer: fine) {
+      .trend-legend-item:hover { color: var(--ink); }
+    }
+    .trend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+    /* ── DASHBOARD · CATEGORY PANEL ── */
+    /* The whole panel is tinted with the selected category's hue so the chart
+       selection and the list you are editing read as one object. */
+    .dash-panel-card { padding: 0; overflow: hidden; }
+    .bp-head { padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 12px; border-top: 4px solid var(--line-strong); border-bottom: 1px solid var(--line); }
+    .bp-head-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .bp-month-pill { padding: 5px 12px; border-radius: var(--r-pill); background: var(--accent-soft); border: 1px solid var(--accent-soft-border); color: var(--accent-strong); font-size: 13px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+    .bp-cat-pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 8px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--line-strong); font-size: 13px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+    .bp-cat-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .bp-summary { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+    .bp-nav { display: inline-flex; gap: 8px; align-items: center; }
+    .bp-nav-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: var(--r-btn); background: var(--surface); color: var(--ink-2); font-size: 13px; cursor: pointer; transition: background-color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
+    .bp-nav-btn:active { transform: scale(0.94); }
+    @media (hover: hover) and (pointer: fine) {
+      .bp-nav-btn:hover { background: var(--surface-hover); }
+    }
+    .bp-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .bp-tools .search-input { flex: 1 1 180px; min-width: 0; padding: 6px 10px; }
+    .bp-sorts { display: flex; gap: 6px; }
+    .bp-sorts .month-pill { padding: 4px 12px; }
+
+    .bp-grid { display: grid; grid-template-columns: 28px 56px minmax(0, 1fr) 76px 120px 40px 32px; gap: 8px; align-items: center; }
+    .bp-thead { padding: 8px 16px; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--ink-3); border-bottom: 1px solid var(--line); }
+    .bp-check { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+    .bp-body { flex: 1; overflow-y: auto; min-height: 0; }
+    .bp-item { border-bottom: 1px solid var(--line); }
+    .bp-item.checked { background: var(--accent-soft); }
+    .bp-item.editing { background: var(--surface-sunken); }
+    .bp-row { padding: 9px 16px; cursor: pointer; font-size: 13px; }
+    @media (hover: hover) and (pointer: fine) {
+      .bp-item:not(.checked):not(.editing) .bp-row:hover { background: var(--surface-hover); }
+    }
+    .bp-date { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .bp-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bp-amount { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .bp-pct { text-align: right; color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .bp-pencil { text-align: center; color: var(--ink-3); }
+    .bp-empty { padding: 48px 16px; text-align: center; font-size: 13px; color: var(--ink-3); }
+
+    .bp-edit-form { padding: 0 16px 14px 108px; }
+    .bp-edit-inner { background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 12px; }
+    .bp-edit-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; }
+    .bp-edit-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--ink-3); }
+    .bp-edit-fields input, .bp-edit-fields select { width: 100%; border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: 7px 9px; font-size: 13px; font-weight: 400; letter-spacing: 0; color: var(--ink); background: var(--surface); outline: none; }
+    .bp-edit-fields input:focus, .bp-edit-fields select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .bp-edit-actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+    .bp-edit-src { font-size: 12px; color: var(--ink-3); margin-left: auto; }
+
+    .bp-bulk { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--header-bg); color: var(--header-ink); font-size: 13px; flex-wrap: wrap; }
+    .bp-bulk-count { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .bp-bulk-label { color: rgba(246,245,241,.6); }
+    .bp-bulk select { padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: var(--r-btn); background: var(--surface); color: var(--ink); font-size: 13px; }
+    .bp-bulk-x { background: none; border: none; cursor: pointer; padding: 4px 8px; color: rgba(246,245,241,.7); font-size: 14px; }
+    @media (hover: hover) and (pointer: fine) {
+      .bp-bulk-x:hover { color: var(--header-ink); }
+    }
+    .bp-foot { padding: 8px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-3); display: flex; justify-content: space-between; gap: 12px; }
+
+    .dash-tip { position: fixed; z-index: 400; pointer-events: none; min-width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+    .dash-tip-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+    .dash-tip-month { margin-left: auto; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--ink-3); }
+    .dash-tip-amt { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .dash-tip-meta { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+    .dash-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 550; background: var(--header-bg); color: var(--header-ink); padding: 10px 18px; border-radius: var(--r-pill); font-size: 13px; box-shadow: var(--shadow-lg); display: flex; gap: 14px; align-items: center; }
+    .dash-toast-undo { background: none; border: none; cursor: pointer; color: var(--accent-on-dark); font-weight: 600; font-size: 13px; }
+    /* display:flex above would defeat the hidden attribute on its own */
+    .dash-tip[hidden], .dash-toast[hidden] { display: none; }
+
+    /* Below the two-pane breakpoint the panes stack and stop pinning to the viewport. */
+    @media (max-width: 1040px) {
+      .dash-col-panel { position: static; }
+      .dash-card { height: auto; min-height: 0; }
+      .bp-body { max-height: 60vh; }
+      .bp-edit-form { padding-left: 16px; }
     }
     .month-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
     .month-pill { padding: 5px 14px; border-radius: var(--r-pill); font-size: 12px; font-weight: 500; cursor: pointer; background: var(--surface); color: var(--ink-2); border: 1px solid var(--line); transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
@@ -596,23 +673,27 @@
 
   <!-- ── DASHBOARD ── -->
   <div id="view-dashboard" class="view active">
-    <div class="page-title">Dashboard</div>
-    <div class="owner-tabs" id="dash-owner-tabs">
-      <div class="owner-tab active" data-owner="ALL">All</div>
-      <div class="owner-tab" data-owner="SHAN">SHAN</div>
-      <div class="owner-tab" data-owner="JANICE">JANICE</div>
-      <div class="owner-tab" data-owner="JOINT">JOINT</div>
-    </div>
-    <div class="summary-grid" id="dash-summary"></div>
-    <div class="dash-chart-row">
-      <div class="chart-wrap">
-        <div class="section-title">6-Month Spending Trend</div>
-        <canvas id="trendChart" height="90"></canvas>
+    <div class="dash-head">
+      <h1 class="dash-title">Dashboard</h1>
+      <div class="owner-tabs" id="dash-owner-tabs">
+        <div class="owner-tab active" data-owner="ALL">All</div>
+        <div class="owner-tab" data-owner="SHAN">SHAN</div>
+        <div class="owner-tab" data-owner="JANICE">JANICE</div>
+        <div class="owner-tab" data-owner="JOINT">JOINT</div>
       </div>
-      <div class="breakdown-panel" id="breakdown-panel">
-        <div class="bp-hint">Click a bar segment on the chart to see the category breakdown</div>
+      <div class="dash-spacer"></div>
+      <div class="dash-stats" id="dash-stats"></div>
+    </div>
+    <div class="dash-grid">
+      <div class="dash-col-chart">
+        <div class="card dash-card" id="trend-card"></div>
+      </div>
+      <div class="dash-col-panel">
+        <div class="card dash-card dash-panel-card" id="breakdown-panel"></div>
       </div>
     </div>
+    <div class="dash-tip" id="dash-tip" hidden></div>
+    <div class="dash-toast" id="dash-toast" hidden></div>
   </div>
 
   <!-- ── TRANSACTIONS ── -->
@@ -1003,7 +1084,6 @@ const CAT_COLORS = {
 };
 
 let allAccounts = [];
-let trendChart = null;
 let dashOwner = 'ALL';
 let _dashData = null;
 let txSortKey = 'date_parsed';
@@ -1095,6 +1175,23 @@ function stmtRef(bank, statementDate, statementMonth) {
   return `<span class="stmt-ref">${b}${dateLabel !== '—' ? ' · ' + dateLabel : ''}</span>`;
 }
 
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// For values interpolated into a double-quoted HTML attribute.
+function escAttr(s) {
+  return escHtml(s).replace(/"/g, '&quot;');
+}
+
+// Compact DD Mmm — the dashboard's date column is 56px wide.
+function fmtDayMon(dateParsed) {
+  if (!dateParsed) return '—';
+  const [, m, d] = dateParsed.split('-');
+  return `${d} ${MONTHS_SHORT[+m - 1] || ''}`;
+}
+
 function catBadge(cat) {
   const cls = CAT_CLASS[cat] || 'cat-OTHERS';
   return `<span class="cat-badge ${cls}">${cat || '—'}</span>`;
@@ -1110,102 +1207,183 @@ async function api(path) {
 }
 
 // ── DASHBOARD ──
+// Two-pane workspace. Left: a CSS-drawn 3-month stacked trend (no chart library).
+// Right: the transactions behind the selected month + category, editable in place.
+// Selecting a month or category anywhere — bar segment, legend, ↑/↓ keys, the
+// panel's nav buttons — drives the right pane.
+const DASH_MONTHS_SHOWN = 3;
+
+let dashMonth = null;          // YYYY-MM in focus
+let dashCat = null;            // category in focus
+let dashRows = [];             // real-expense rows for (dashMonth, dashCat)
+let dashChecked = new Set();
+let dashSort = 'amount';       // amount | date | name
+let dashQuery = '';
+let dashEditId = null;
+let dashHoverCat = null;       // transient highlight from hovering a segment/legend
+let dashBulkCat = CATEGORIES[0];
+let _dashUndo = null;          // [{id, fields}] pre-change snapshot for the toast
+let _dashToastTimer = null;
+let _bpFocusSearch = false;    // re-focus the search box after a re-render
+
 document.querySelectorAll('#dash-owner-tabs .owner-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('#dash-owner-tabs .owner-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     dashOwner = tab.dataset.owner;
+    dashEditId = null;
+    dashChecked.clear();
     loadDashboard();
   });
+});
+
+// ↑/↓ cycle categories while the dashboard is the active view
+window.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  if (!document.getElementById('view-dashboard').classList.contains('active')) return;
+  if (document.querySelector('.modal-overlay.visible')) return;
+  if (e.target.closest && e.target.closest('input, select, textarea')) return;
+  e.preventDefault();
+  stepDashCat(e.key === 'ArrowDown' ? 1 : -1);
 });
 
 async function loadDashboard() {
   const data = await api(`/api/dashboard?owner=${dashOwner}&months=6`);
   _dashData = data;
+  const months = (data.trend || []).map(t => t.month);
+  if (!months.includes(dashMonth)) dashMonth = months[months.length - 1] || null;
+  const cats = dashCatList();
+  if (!cats.some(c => c.cat === dashCat)) dashCat = cats.length ? cats[0].cat : null;
   renderSummary(data);
-  renderTrend(data.trend);
+  renderTrend();
+  await loadBreakdown();
 }
 
+// Category totals for the focused month, biggest first — also the ↑/↓ cycle order.
+function dashCatList() {
+  const t = (_dashData && _dashData.trend || []).find(x => x.month === dashMonth);
+  if (!t) return [];
+  return Object.entries(t.categories)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat, amt]) => ({ cat, amt }));
+}
+
+function dashMonthTotal(month) {
+  const t = (_dashData && _dashData.trend || []).find(x => x.month === month);
+  return t ? Object.values(t.categories).reduce((s, v) => s + v, 0) : 0;
+}
+
+function stepDashCat(dir) {
+  const list = dashCatList();
+  if (!list.length) return;
+  const i = list.findIndex(c => c.cat === dashCat);
+  selectDashCat(list[(i + dir + list.length) % list.length].cat);
+}
+
+function selectDashMonth(month) {
+  if (!month || month === dashMonth) return;
+  dashMonth = month;
+  resetPanelState();
+  const cats = dashCatList();
+  if (!cats.some(c => c.cat === dashCat)) dashCat = cats.length ? cats[0].cat : null;
+  renderSummary(_dashData);
+  renderTrend();
+  loadBreakdown();
+}
+
+function selectDashCat(cat, month) {
+  if (month && month !== dashMonth) {
+    dashMonth = month;
+    renderSummary(_dashData);
+  }
+  dashCat = cat;
+  dashHoverCat = null;
+  resetPanelState();
+  renderTrend();
+  loadBreakdown();
+}
+
+function resetPanelState() {
+  dashEditId = null;
+  dashQuery = '';
+  dashChecked.clear();
+}
+
+// ── DASHBOARD · HEAD STRIP ──
 function renderSummary(data) {
-  const el = document.getElementById('dash-summary');
-  el.innerHTML = renderDeltaCard(data) + renderBudgetCard(data);
+  document.getElementById('dash-stats').innerHTML = renderDeltaStat(data) + renderTargetStat(data);
 }
 
-function renderDeltaCard(data) {
+function renderDeltaStat(data) {
   const trend = data.trend || [];
-  const cur = trend[trend.length - 1];
-  if (!cur) return '';
-  const total = data.summary.total || 0;
+  if (!trend.length || !dashMonth) return '';
+  const i = trend.findIndex(t => t.month === dashMonth);
+  const total = dashMonthTotal(dashMonth);
   let deltaHtml = '';
-  if (trend.length > 1) {
-    const prev = trend[trend.length - 2];
-    const prevTotal = Object.values(prev.categories).reduce((s, v) => s + v, 0);
-    const diff = total - prevTotal;
-    if (diff === 0) {
-      deltaHtml = `<div class="delta delta-flat">No change vs ${fmtMonth(prev.month)}</div>`;
-    } else {
-      const up = diff > 0;
-      const pctTxt = prevTotal > 0 ? ` (${up ? '+' : '−'}${Math.round(Math.abs(diff) / prevTotal * 100)}%)` : '';
-      deltaHtml = `<div class="delta ${up ? 'delta-up' : 'delta-down'}">${up ? '▲' : '▼'} ${fmtAmount(Math.abs(diff))}${pctTxt} vs ${fmtMonth(prev.month)}</div>`;
+  if (i > 0) {
+    const prevMonth = trend[i - 1].month;
+    const prevTotal = dashMonthTotal(prevMonth);
+    if (prevTotal > 0) {
+      const d = (total - prevTotal) / prevTotal;
+      const cls = d === 0 ? 'delta-flat' : d > 0 ? 'delta-up' : 'delta-down';
+      const glyph = d === 0 ? '' : d > 0 ? '▲ ' : '▼ ';
+      deltaHtml = `<span class="dash-stat-delta ${cls}">${glyph}${Math.abs(Math.round(d * 100))}% vs ${fmtMonth(prevMonth)}</span>`;
     }
   }
   return `
-    <div class="summary-card total">
-      <div class="label">${fmtMonth(data.summary.month)} · Total</div>
-      <div class="value">${fmtAmount(total)}</div>
-      <div class="sub">${data.summary.tx_count != null ? data.summary.tx_count + ' transactions' : ''}</div>
+    <div class="dash-stat">
+      <span class="dash-stat-label">${fmtMonth(dashMonth).toUpperCase()} TOTAL</span>
+      <span class="dash-stat-value">${fmtAmount(total)}</span>
       ${deltaHtml}
     </div>`;
 }
 
-function renderBudgetCard(data) {
+// The target readout stays household-scoped and pinned to the latest household
+// data month — it deliberately ignores the owner tab and the focused month, so
+// the month it refers to is spelled out in the label.
+function renderTargetStat(data) {
   const budget = data.budget;
-  const caption = dashOwner !== 'ALL' ? '<span class="budget-scope">Household</span>' : '';
   if (budget == null) {
     return `
-      <div class="summary-card" id="budget-card">
-        <div class="label">Monthly target ${caption}</div>
-        <div style="margin-top:10px;">
-          <button class="btn btn-outline btn-sm" onclick="toggleBudgetEdit()">Set monthly target</button>
-        </div>
+      <div class="dash-stat" id="dash-target">
+        <span class="dash-stat-label">TARGET</span>
+        <button class="btn btn-outline btn-sm" onclick="toggleBudgetEdit()">Set monthly target</button>
       </div>`;
   }
   const spent = data.household_latest_total || 0;
+  const hMonth = data.household_latest_month;
+  const pct = spent / budget;
+  const over = spent >= budget;
   const now = new Date();
   const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const inProgress = data.household_latest_month === curMonth;
-  const fillPct = Math.min(100, spent / budget * 100);
-  const over = spent >= budget;
   let paceTick = '';
-  if (inProgress) {
+  if (hMonth === curMonth) {
     const daysIn = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     paceTick = `<div class="pace-tick" style="left:${(now.getDate() / daysIn * 100).toFixed(1)}%" title="Linear pace today"></div>`;
   }
-  const status = over
-    ? `<div class="sub" style="color:var(--danger);font-weight:600;">Over by ${fmtAmount(spent - budget)}</div>`
-    : `<div class="sub">${fmtAmount(budget - spent)} remaining</div>`;
+  const status = over ? `Over by ${fmtAmount(spent - budget)}` : `${fmtAmount(budget - spent)} remaining`;
   return `
-    <div class="summary-card" id="budget-card">
-      <div class="label">Monthly target ${caption}
-        <button class="budget-edit-btn" onclick="toggleBudgetEdit()" title="Edit target">✎</button>
-      </div>
-      <div class="value" style="font-size:18px;">${fmtAmount(spent)} <span class="budget-of">${inProgress ? 'spent so far' : 'spent'} of ${fmtAmount(budget)}</span></div>
-      <div class="budget-bar">
-        <div class="budget-fill ${over ? 'over' : ''}" style="width:${fillPct.toFixed(1)}%"></div>
+    <div class="dash-stat" id="dash-target" title="Household monthly target · ${status}">
+      <span class="dash-stat-label">TARGET${hMonth ? ' · ' + fmtMonth(hMonth).toUpperCase() : ''}</span>
+      <div class="dash-target-bar">
+        <div class="dash-target-fill ${over ? 'over' : ''}" style="width:${Math.min(100, pct * 100).toFixed(1)}%"></div>
         ${paceTick}
       </div>
-      ${status}
+      <span class="dash-target-text">${Math.round(pct * 100)}% of ${fmtAmount(budget)}</span>
+      ${dashOwner !== 'ALL' ? '<span class="budget-scope">Household</span>' : ''}
+      <button class="budget-edit-btn" onclick="toggleBudgetEdit()" title="Edit target">✎</button>
     </div>`;
 }
 
 function toggleBudgetEdit() {
-  const card = document.getElementById('budget-card');
-  if (!card || !_dashData) return;
+  const el = document.getElementById('dash-target');
+  if (!el || !_dashData) return;
   const cur = _dashData.budget != null ? _dashData.budget : '';
-  card.innerHTML = `
-    <div class="label">Monthly target</div>
-    <div class="budget-edit-row">
-      <input type="number" id="budget-input" class="review-num-input" value="${cur}" min="1" step="1" placeholder="e.g. 15000000"
+  el.outerHTML = `
+    <div class="dash-stat" id="dash-target">
+      <span class="dash-stat-label">TARGET</span>
+      <input type="number" id="budget-input" class="dash-target-input" value="${cur}" min="1" step="1" placeholder="e.g. 15000000"
              oninput="document.getElementById('budget-save-btn').disabled = !(parseInt(this.value,10) > 0)"
              onkeydown="if(event.key==='Enter')saveBudget();if(event.key==='Escape')renderSummary(_dashData)">
       <button class="btn btn-sm" id="budget-save-btn" onclick="saveBudget()" ${cur > 0 ? '' : 'disabled'}>Save</button>
@@ -1223,150 +1401,366 @@ async function saveBudget() {
   renderSummary(_dashData);
 }
 
-function renderTrend(trend) {
-  const months = trend.map(t => fmtMonth(t.month));
-  const datasets = CATEGORIES.map(cat => ({
-    label: cat,
-    data: trend.map(t => t.categories[cat] || 0),
-    backgroundColor: CAT_COLORS[cat] || '#9E9E9E',
-    borderWidth: 0,
-  })).filter(ds => ds.data.some(v => v > 0));
+// ── DASHBOARD · TREND ──
+function renderTrend() {
+  const card = document.getElementById('trend-card');
+  const trend = (_dashData && _dashData.trend) || [];
+  const shown = trend.slice(-DASH_MONTHS_SHOWN);
+  if (!shown.length) {
+    card.innerHTML = '<div class="bp-empty">No spending data yet — upload a statement or add a transaction.</div>';
+    return;
+  }
+  const max = Math.max(...shown.map(t => dashMonthTotal(t.month)), 1);
+  const activeCat = dashHoverCat || dashCat;
 
-  const stackTotalsPlugin = {
-    id: 'stackTotals',
-    afterDatasetsDraw(chart) {
-      const { ctx, data, scales: { x, y } } = chart;
-      const totals = data.labels.map((_, i) =>
-        data.datasets.reduce((s, ds) => s + (ds.data[i] || 0), 0)
-      );
-      ctx.save();
-      ctx.font = 'bold 11px sans-serif';
-      ctx.fillStyle = '#444';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      totals.forEach((total, i) => {
-        if (!total) return;
-        const xPos = x.getPixelForValue(i);
-        const yPos = y.getPixelForValue(total) - 4;
-        ctx.fillText('Rp ' + (total / 1e6).toFixed(1) + 'M', xPos, yPos);
-      });
-      ctx.restore();
-    }
-  };
+  const monthsHtml = shown.map(t => {
+    const total = dashMonthTotal(t.month);
+    const on = t.month === dashMonth;
+    const segs = CATEGORIES.map(cat => {
+      const amt = t.categories[cat] || 0;
+      if (amt <= 0) return '';
+      const ring = on && cat === dashCat ? 'box-shadow:inset 0 0 0 2px var(--ink);' : '';
+      return `<div class="trend-seg" data-cat="${escAttr(cat)}" data-month="${t.month}"
+        style="flex:0 0 ${(amt / (total || 1) * 100).toFixed(3)}%;background:${CAT_COLORS[cat] || '#9E9E9E'};opacity:${cat === activeCat ? 1 : 0.35};${ring}"></div>`;
+    }).join('');
+    return `
+      <div class="trend-month ${on ? 'active' : ''}" data-month="${t.month}">
+        <div class="trend-total">${fmtAmount(total)}</div>
+        <div class="trend-bar-area">
+          <div class="trend-bar" style="height:${Math.max(2, total / max * 100).toFixed(2)}%">${segs}</div>
+        </div>
+        <div class="trend-month-label">${fmtMonth(t.month)}</div>
+      </div>`;
+  }).join('');
 
-  if (trendChart) trendChart.destroy();
-  trendChart = new Chart(document.getElementById('trendChart'), {
-    type: 'bar',
-    data: { labels: months, datasets },
-    options: {
-      responsive: true,
-      layout: { padding: { top: 24 } },
-      onClick(event, elements) {
-        if (!elements.length) return;
-        const el = elements[0];
-        const month = trend[el.index].month;
-        const category = datasets[el.datasetIndex].label;
-        loadBreakdown(month, category);
-      },
-      plugins: {
-        legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 10 } },
-        tooltip: {
-          callbacks: {
-            label: ctx => ` ${ctx.dataset.label}: ${fmtAmount(ctx.raw)}`,
-          }
-        }
-      },
-      scales: {
-        x: { stacked: true, grid: { display: false } },
-        y: { stacked: true, ticks: { callback: v => 'Rp ' + (v/1e6).toFixed(0) + 'M' } },
-      },
-    },
-    plugins: [stackTotalsPlugin],
+  const legendHtml = CATEGORIES
+    .filter(cat => shown.some(t => (t.categories[cat] || 0) > 0))
+    .map(cat => `
+      <div class="trend-legend-item ${cat === activeCat ? 'active' : ''}" data-cat="${escAttr(cat)}">
+        <span class="trend-swatch" style="background:${CAT_COLORS[cat] || '#9E9E9E'}"></span>${cat}
+      </div>`).join('');
+
+  card.innerHTML = `
+    <div class="trend-head">
+      <div class="trend-title">${DASH_MONTHS_SHOWN}-Month Spending Trend</div>
+      <div class="trend-hint">Hover a segment for details · click to view its transactions</div>
+    </div>
+    <div class="trend-months">${monthsHtml}</div>
+    <div class="trend-legend">${legendHtml}</div>`;
+}
+
+// Hover highlight is applied in place rather than by re-rendering, so a mousemove
+// over a segment never rebuilds the element the cursor is sitting on.
+function applyDashHighlight() {
+  const active = dashHoverCat || dashCat;
+  document.querySelectorAll('#trend-card .trend-seg').forEach(el => {
+    el.style.opacity = el.dataset.cat === active ? 1 : 0.35;
+  });
+  document.querySelectorAll('#trend-card .trend-legend-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.cat === active);
   });
 }
 
+function setDashHover(cat) {
+  if (dashHoverCat === cat) return;
+  dashHoverCat = cat;
+  applyDashHighlight();
+}
+
+function showDashTip(cat, month, x, y) {
+  const trend = (_dashData && _dashData.trend) || [];
+  const t = trend.find(v => v.month === month);
+  if (!t) return;
+  const amt = t.categories[cat] || 0;
+  const total = dashMonthTotal(month);
+  const tip = document.getElementById('dash-tip');
+  tip.innerHTML = `
+    <div class="dash-tip-head">
+      <span class="trend-swatch" style="background:${CAT_COLORS[cat] || '#9E9E9E'}"></span>${escHtml(cat)}
+      <span class="dash-tip-month">${fmtMonth(month).toUpperCase()}</span>
+    </div>
+    <div class="dash-tip-amt">${fmtAmount(amt)}</div>
+    <div class="dash-tip-meta">${Math.round(amt / (total || 1) * 100)}% of month total</div>`;
+  tip.hidden = false;
+  tip.style.left = (x > window.innerWidth - 260 ? x - 250 : x + 16) + 'px';
+  tip.style.top = (y + 16) + 'px';
+}
+
+function hideDashTip() {
+  document.getElementById('dash-tip').hidden = true;
+}
+
+function initDashEvents() {
+  const card = document.getElementById('trend-card');
+
+  card.addEventListener('click', e => {
+    const seg = e.target.closest('.trend-seg');
+    if (seg) { selectDashCat(seg.dataset.cat, seg.dataset.month); return; }
+    const legend = e.target.closest('.trend-legend-item');
+    if (legend) { selectDashCat(legend.dataset.cat); return; }
+    const month = e.target.closest('.trend-month');
+    if (month) selectDashMonth(month.dataset.month);
+  });
+
+  card.addEventListener('mousemove', e => {
+    const seg = e.target.closest('.trend-seg');
+    if (seg) {
+      setDashHover(seg.dataset.cat);
+      showDashTip(seg.dataset.cat, seg.dataset.month, e.clientX, e.clientY);
+      return;
+    }
+    hideDashTip();
+    const legend = e.target.closest('.trend-legend-item');
+    setDashHover(legend ? legend.dataset.cat : null);
+  });
+
+  card.addEventListener('mouseleave', () => {
+    hideDashTip();
+    setDashHover(null);
+  });
+}
+
+// ── DASHBOARD · CATEGORY PANEL ──
 async function loadBreakdown(month, category) {
+  if (month) dashMonth = month;
+  if (category) dashCat = category;
   const panel = document.getElementById('breakdown-panel');
-  panel.innerHTML = '<div class="bp-hint">Loading…</div>';
-
-  const params = new URLSearchParams({ month, category });
-  if (dashOwner && dashOwner !== 'ALL') params.set('ideal_paid_by', dashOwner);
-  const rows = await api(`/api/transactions?${params}`);
-
-  const real = rows.filter(r => r.is_real_expense && r.amount > 0)
-                    .sort((a, b) => b.amount - a.amount);
-  const catTotal = real.reduce((s, r) => s + r.amount, 0);
-  const color = CAT_COLORS[category] || '#9E9E9E';
-  const monthLabel = fmtMonth(month);
-
-  if (!real.length) {
-    panel.innerHTML = `<div class="bp-header">${category}</div><div class="bp-sub">${monthLabel}</div><div class="bp-hint">No transactions</div>`;
+  if (!dashMonth || !dashCat) {
+    panel.innerHTML = '<div class="bp-empty">Nothing to break down yet</div>';
     return;
   }
+  const params = new URLSearchParams({ month: dashMonth, category: dashCat });
+  if (dashOwner && dashOwner !== 'ALL') params.set('ideal_paid_by', dashOwner);
+  const rows = await api(`/api/transactions?${params}`);
+  dashRows = rows.filter(r => r.is_real_expense && r.amount > 0);
+  dashChecked = new Set([...dashChecked].filter(id => dashRows.some(r => r.id === id)));
+  renderBreakdown();
+}
 
-  const catOptions = CATEGORIES.map(c => `<option value="${c}" ${c===category?'selected':''}>${c}</option>`).join('');
+function visibleBpRows() {
+  const q = dashQuery.trim().toLowerCase();
+  const rows = q ? dashRows.filter(r => (r.description || '').toLowerCase().includes(q)) : dashRows.slice();
+  return rows.sort(
+    dashSort === 'amount' ? (a, b) => b.amount - a.amount
+    : dashSort === 'date' ? (a, b) => (b.date_parsed || '').localeCompare(a.date_parsed || '')
+    : (a, b) => (a.description || '').localeCompare(b.description || '')
+  );
+}
 
-  const rowsHtml = real.map(r => {
+function renderBreakdown() {
+  const panel = document.getElementById('breakdown-panel');
+  const color = CAT_COLORS[dashCat] || '#9E9E9E';
+  const catTotal = dashRows.reduce((s, r) => s + r.amount, 0);
+  const rows = visibleBpRows();
+  const allChecked = rows.length > 0 && rows.every(r => dashChecked.has(r.id));
+  const searching = dashQuery.trim().length > 0;
+
+  const rowsHtml = rows.map(r => {
     const pct = catTotal ? Math.round(r.amount / catTotal * 100) : 0;
-    const barW = catTotal ? (r.amount / real[0].amount * 100).toFixed(1) : 0;
+    const checked = dashChecked.has(r.id);
+    const editing = dashEditId === r.id;
     const desc = r.description || '—';
-    const safeDesc = desc.replace(/"/g, '&quot;');
-    const src = r.paid_by || '—';
-    const srcBadge = r.paid_by ? `<span class="owner-badge owner-${r.paid_by}" style="font-size:10px;padding:1px 6px">${r.paid_by}</span>` : `<span style="font-size:11px;color:var(--ink-3)">—</span>`;
+    const srcBadge = r.paid_by
+      ? `<span class="owner-badge owner-${r.paid_by}" style="font-size:10px;padding:1px 6px">${r.paid_by}</span>`
+      : '<span style="font-size:11px;color:var(--ink-3)">—</span>';
     return `
-    <div class="bp-row" id="bpr-${r.id}">
-      <div class="bp-label" title="${safeDesc}">${desc}</div>
-      <div class="bp-bar-wrap"><div class="bp-bar" style="width:${barW}%;background:${color}"></div></div>
-      <div class="bp-amount">${fmtAmount(r.amount)}</div>
-      <div class="bp-pct">${pct}%</div>
-      <div class="bp-source">${srcBadge}</div>
-      <button class="bp-edit-btn" title="Edit" onclick="toggleBpEdit(${r.id})">✎</button>
-    </div>
-    <div class="bp-edit-form" id="bpf-${r.id}">
-      <label>Description</label>
-      <input id="bpf-desc-${r.id}" value="${safeDesc}">
-      <label>Amount (IDR)</label>
-      <input id="bpf-amt-${r.id}" type="number" value="${Math.round(r.amount)}">
-      <label>Category</label>
-      <select id="bpf-cat-${r.id}">${catOptions}</select>
-      <div class="bp-edit-actions">
-        <button class="bp-cancel-btn" onclick="toggleBpEdit(${r.id})">Cancel</button>
-        <button class="bp-save-btn" onclick="saveBpEdit(${r.id},'${month}','${category}')">Save</button>
-      </div>
-    </div>`;
+      <div class="bp-item ${checked ? 'checked' : ''} ${editing ? 'editing' : ''}">
+        <div class="bp-grid bp-row" onclick="toggleBpEdit(${r.id})">
+          <span onclick="event.stopPropagation()">
+            <input type="checkbox" class="bp-check" ${checked ? 'checked' : ''} onchange="toggleBpCheck(${r.id})">
+          </span>
+          <span class="bp-date">${fmtDayMon(r.date_parsed)}</span>
+          <span class="bp-desc" title="${escAttr(desc)}">${escHtml(desc)}</span>
+          <span>${srcBadge}</span>
+          <span class="bp-amount">${fmtAmount(r.amount)}</span>
+          <span class="bp-pct">${pct}%</span>
+          <span class="bp-pencil">✎</span>
+        </div>
+        ${editing ? bpEditFormHtml(r) : ''}
+      </div>`;
   }).join('');
 
+  const emptyText = searching
+    ? `No ${dashCat} transactions match “${escHtml(dashQuery)}”`
+    : `No ${dashCat} transactions in ${fmtMonth(dashMonth)}`;
+
+  const bulkHtml = dashChecked.size ? `
+    <div class="bp-bulk">
+      <span class="bp-bulk-count">${dashChecked.size} selected · ${fmtAmount(dashRows.filter(r => dashChecked.has(r.id)).reduce((s, r) => s + r.amount, 0))}</span>
+      <span class="dash-spacer"></span>
+      <span class="bp-bulk-label">Move to</span>
+      <select onchange="dashBulkCat = this.value">
+        ${CATEGORIES.map(c => `<option value="${escAttr(c)}" ${c === dashBulkCat ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+      <button class="btn btn-sm" onclick="applyBpBulk()">Move</button>
+      <button class="bp-bulk-x" onclick="clearBpChecked()" title="Clear selection">✕</button>
+    </div>` : '';
+
   panel.innerHTML = `
-    <div class="bp-header" style="color:${color}">${category}</div>
-    <div class="bp-sub">${monthLabel} · ${fmtAmount(catTotal)} total · ${real.length} items</div>
-    <div class="bp-header-row">
-      <div>Description</div>
-      <div></div>
-      <div style="text-align:right">Amount</div>
-      <div style="text-align:right">%</div>
-      <div style="text-align:center">Source</div>
-      <div></div>
+    <div class="bp-head" style="background:color-mix(in srgb, ${color} 14%, var(--surface));border-top-color:${color};border-bottom-color:color-mix(in srgb, ${color} 35%, var(--line))">
+      <div class="bp-head-row">
+        <span class="bp-month-pill">${fmtMonth(dashMonth).toUpperCase()}</span>
+        <span class="bp-cat-pill"><span class="bp-cat-swatch" style="background:${color}"></span>${dashCat}</span>
+        <span class="bp-summary">${fmtAmount(catTotal)} · ${dashRows.length} item${dashRows.length === 1 ? '' : 's'}</span>
+        <span class="dash-spacer"></span>
+        <span class="bp-nav">
+          <button class="bp-nav-btn" title="Previous category (↑)" onclick="stepDashCat(-1)">↑</button>
+          <button class="bp-nav-btn" title="Next category (↓)" onclick="stepDashCat(1)">↓</button>
+        </span>
+      </div>
+      <div class="bp-tools">
+        <input class="search-input" id="bp-search" placeholder="Search this category…" value="${escAttr(dashQuery)}" oninput="onBpQuery(this.value)">
+        <span class="bp-sorts">
+          ${[['amount', 'Amount'], ['date', 'Date'], ['name', 'A–Z']].map(([k, label]) =>
+            `<span class="month-pill ${dashSort === k ? 'active' : ''}" onclick="setBpSort('${k}')">${label}</span>`).join('')}
+        </span>
+      </div>
     </div>
-    ${rowsHtml}`;
+    <div class="bp-grid bp-thead" style="background:color-mix(in srgb, ${color} 9%, var(--surface));border-bottom-color:color-mix(in srgb, ${color} 30%, var(--line))">
+      <span><input type="checkbox" class="bp-check" ${allChecked ? 'checked' : ''} onchange="toggleBpAll()" title="Select all shown"></span>
+      <span>DATE</span><span>DESCRIPTION</span><span>SOURCE</span>
+      <span style="text-align:right">AMOUNT</span><span style="text-align:right">%</span><span></span>
+    </div>
+    <div class="bp-body" style="background:color-mix(in srgb, ${color} 5%, var(--surface))">
+      ${rows.length ? rowsHtml : `<div class="bp-empty">${emptyText}</div>`}
+    </div>
+    ${bulkHtml}
+    <div class="bp-foot" style="background:color-mix(in srgb, ${color} 9%, var(--surface));border-top-color:color-mix(in srgb, ${color} 30%, var(--line))">
+      <span>${searching ? `${rows.length} of ${dashRows.length} shown` : `${rows.length} transaction${rows.length === 1 ? '' : 's'}`}</span>
+      <span>Click a row to edit · ↑↓ switches category</span>
+    </div>`;
+
+  if (_bpFocusSearch) {
+    _bpFocusSearch = false;
+    const input = document.getElementById('bp-search');
+    if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+  }
+}
+
+function bpEditFormHtml(r) {
+  const catOptions = CATEGORIES.map(c => `<option value="${escAttr(c)}" ${c === r.category ? 'selected' : ''}>${c}</option>`).join('');
+  const srcOptions = ['SHAN', 'JANICE', 'JOINT'].map(o => `<option value="${o}" ${o === r.paid_by ? 'selected' : ''}>${o}</option>`).join('');
+  return `
+    <div class="bp-edit-form">
+      <div class="bp-edit-inner">
+        <div class="bp-edit-fields">
+          <label>DESCRIPTION
+            <input id="bpf-desc-${r.id}" value="${escAttr(r.description || '')}">
+          </label>
+          <label>AMOUNT (RP)
+            <input id="bpf-amt-${r.id}" type="number" min="1" step="1" value="${Math.round(r.amount)}">
+          </label>
+          <label>CATEGORY
+            <select id="bpf-cat-${r.id}">${catOptions}</select>
+          </label>
+          <label>ACTUAL SOURCE
+            <select id="bpf-src-${r.id}">${srcOptions}</select>
+          </label>
+        </div>
+        <div class="bp-edit-actions">
+          <button class="btn btn-sm" onclick="saveBpEdit(${r.id})">Save</button>
+          <button class="btn btn-outline btn-sm" onclick="toggleBpEdit(${r.id})">Cancel</button>
+          <span class="bp-edit-src">${escHtml(r.account_name || '—')}</span>
+        </div>
+      </div>
+    </div>`;
 }
 
 function toggleBpEdit(id) {
-  document.getElementById(`bpf-${id}`).classList.toggle('open');
+  dashEditId = dashEditId === id ? null : id;
+  renderBreakdown();
 }
 
-async function saveBpEdit(id, month, origCategory) {
-  const desc = document.getElementById(`bpf-desc-${id}`).value.trim();
-  const amt  = parseFloat(document.getElementById(`bpf-amt-${id}`).value);
-  const cat  = document.getElementById(`bpf-cat-${id}`).value;
-  if (!desc || isNaN(amt) || amt <= 0) return;
-  await fetch(`/api/transactions/${id}`, {
+function toggleBpCheck(id) {
+  if (dashChecked.has(id)) dashChecked.delete(id); else dashChecked.add(id);
+  renderBreakdown();
+}
+
+function toggleBpAll() {
+  const ids = visibleBpRows().map(r => r.id);
+  const all = ids.length > 0 && ids.every(id => dashChecked.has(id));
+  ids.forEach(id => all ? dashChecked.delete(id) : dashChecked.add(id));
+  renderBreakdown();
+}
+
+function clearBpChecked() {
+  dashChecked.clear();
+  renderBreakdown();
+}
+
+function setBpSort(key) {
+  dashSort = key;
+  renderBreakdown();
+}
+
+function onBpQuery(value) {
+  dashQuery = value;
+  _bpFocusSearch = true;
+  renderBreakdown();
+}
+
+async function patchTx(id, fields) {
+  return fetch(`/api/transactions/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ description: desc, amount: amt, category: cat }),
+    body: JSON.stringify(fields),
   });
-  // reload breakdown with the (possibly new) category context
-  loadBreakdown(month, cat === origCategory ? origCategory : cat);
 }
+
+async function saveBpEdit(id) {
+  const row = dashRows.find(r => r.id === id);
+  if (!row) return;
+  const desc = document.getElementById(`bpf-desc-${id}`).value.trim();
+  const amount = parseFloat(document.getElementById(`bpf-amt-${id}`).value);
+  const category = document.getElementById(`bpf-cat-${id}`).value;
+  const paid_by = document.getElementById(`bpf-src-${id}`).value;
+  if (!desc || isNaN(amount) || amount <= 0) return;
+
+  const undo = [{ id, fields: { description: row.description, amount: row.amount, category: row.category, paid_by: row.paid_by } }];
+  await patchTx(id, { description: desc, amount, category, paid_by });
+  dashEditId = null;
+  showDashToast(category === row.category ? `${desc} updated` : `${desc} moved to ${category}`, undo);
+  await loadDashboard();
+}
+
+async function applyBpBulk() {
+  const ids = [...dashChecked];
+  if (!ids.length) return;
+  const target = dashBulkCat;
+  const undo = ids.map(id => {
+    const row = dashRows.find(r => r.id === id);
+    return { id, fields: { category: row ? row.category : dashCat } };
+  });
+  await Promise.all(ids.map(id => patchTx(id, { category: target })));
+  dashChecked.clear();
+  showDashToast(`${ids.length} transaction${ids.length > 1 ? 's' : ''} moved to ${target}`, undo);
+  await loadDashboard();
+}
+
+function showDashToast(msg, undo) {
+  const el = document.getElementById('dash-toast');
+  _dashUndo = undo || null;
+  el.innerHTML = `<span>${escHtml(msg)}</span>` +
+    (_dashUndo ? '<button class="dash-toast-undo" onclick="undoDashChange()">Undo</button>' : '');
+  el.hidden = false;
+  clearTimeout(_dashToastTimer);
+  _dashToastTimer = setTimeout(hideDashToast, 5000);
+}
+
+function hideDashToast() {
+  document.getElementById('dash-toast').hidden = true;
+  _dashUndo = null;
+}
+
+async function undoDashChange() {
+  if (!_dashUndo) return;
+  const snapshot = _dashUndo;
+  hideDashToast();
+  await Promise.all(snapshot.map(s => patchTx(s.id, s.fields)));
+  await loadDashboard();
+}
+
+initDashEvents();
 
 // ── TRANSACTIONS ──
 let allTxRows = [];   // unfiltered set, for export preview and statement dropdown

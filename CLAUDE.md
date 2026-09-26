@@ -75,7 +75,7 @@ The three `_ALLOWED_*` frozensets at module level are the authoritative whitelis
 - Duplicate detection runs before staging; returns `{duplicate:true}` with in-memory transactions so frontend can confirm
 - All write endpoints that accept `category` validate it against the `CATEGORIES` list before calling db functions
 
-**`templates/index.html`** — single-file SPA (~2800 lines). Vanilla JS + Chart.js (CDN). Five views via `navigate(view)` (Dashboard, Transactions, Settlements, Accounts, Statements — uploading lives in a modal on Statements). Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `selectedStagedIds` (Set), `_reviewCtx`, `pendingUploadId`, `pendingDuplicate`, `dashOwner`, `_dashData`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`.
+**`templates/index.html`** — single-file SPA (~2900 lines). Vanilla JS, no chart library (the trend is drawn with CSS flex bars; Chart.js was removed). Five views via `navigate(view)` (Dashboard, Transactions, Settlements, Accounts, Statements — uploading lives in a modal on Statements). Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `selectedStagedIds` (Set), `_reviewCtx`, `pendingUploadId`, `pendingDuplicate`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`. Dashboard state: `dashOwner`, `_dashData`, `dashMonth`, `dashCat`, `dashRows`, `dashChecked` (Set), `dashSort`, `dashQuery`, `dashEditId`, `dashHoverCat`, `dashBulkCat`, `_dashUndo`.
 
 ## Data Model
 
@@ -208,11 +208,42 @@ Statement month is always derived from the **billing date** on the PDF (credit) 
 - Actual Source (`paid_by`) values: SHAN, JANICE, JOINT — CASH is an account type, not a paid_by value
 - CSV `Amount` column: IDR integer only (`int(round(amount))`), no foreign currency, no decimals; rows sorted ascending by date
 - `allAccounts` is refreshed from the API every time `loadAccounts()` runs — the Add Transaction modal always reflects the current account list
-- Dashboard `owner` tab filters by `t.ideal_paid_by` (Ideal Source), **not** by `a.owner` (account ownership) — this applies to both the trend chart (`get_dashboard_data` in `db.py`) and the category breakdown panel (`loadBreakdown` in `index.html`, which passes `ideal_paid_by=` to `/api/transactions`)
-- Dashboard breakdown panel: `loadBreakdown(month, category)` fetches transactions and renders per-item bars + Actual Source badge; `toggleBpEdit(id)` / `saveBpEdit(id, month, origCategory)` handle inline editing that PATCHes directly to `/api/transactions/<id>`
-- Dashboard summary cards (no month pills): `renderDeltaCard` (latest data month total + MoM delta, respects owner tab) and `renderBudgetCard` (budget vs actual with mid-month pace tick; **household-only — ignores the owner tab**, shows a `Household` caption on non-ALL tabs); inline target editing via `toggleBudgetEdit`/`saveBudget` → `PUT /api/budget`
+- Dashboard `owner` tab filters by `t.ideal_paid_by` (Ideal Source), **not** by `a.owner` (account ownership) — this applies to both the trend (`get_dashboard_data` in `db.py`) and the category panel (`loadBreakdown` in `index.html`, which passes `ideal_paid_by=` to `/api/transactions`)
+- Dashboard layout is a full-height two-pane workspace (see **Dashboard Layout** below), not stacked summary cards
 - Settlements detail pane: `showSettleDetail(dir, month)` renders cell-level transactions in the right panel; `toggleSdEdit(id)` / `saveSdEdit(id, dir, month)` provide the same inline-edit pattern scoped to the settlements context
-- Chart totals: `stackTotalsPlugin` (defined inline in `renderTrend`) draws the month total above each stacked bar using Chart.js `afterDatasetsDraw`
+- Dashboard head strip: `renderDeltaStat` (focused month total + MoM delta, respects owner tab) and `renderTargetStat` (budget vs actual with mid-month pace tick; **household-only and pinned to `household_latest_month`** — it ignores both the owner tab and the focused month, so its label spells out which month it refers to, plus a `Household` pill on non-ALL tabs); inline target editing via `toggleBudgetEdit`/`saveBudget` → `PUT /api/budget`
+
+## Dashboard Layout
+
+Two panes side by side, each `calc(100vh - 170px)` tall, stacking below 1040px. The head
+strip carries the title, owner tabs and the month-total / target readout (the summary cards
+are gone). Selecting a month or a category anywhere drives the right pane.
+
+**Left — trend (`renderTrend`, `#trend-card`)**: the last `DASH_MONTHS_SHOWN` (3) months of
+`/api/dashboard?months=6` as CSS flex stacked bars — no chart library. Segments are `<div>`s
+in `CATEGORIES` order inside a `column-reverse` flex column, sized by `flex-basis` percentage.
+The clickable category legend sits below. `initDashEvents()` attaches one delegated
+click/mousemove/mouseleave listener set to `#trend-card` (the card element survives every
+`innerHTML` re-render); segments and legend items carry `data-cat` / `data-month`.
+Hover highlight is applied in place by `applyDashHighlight()` rather than by re-rendering, so
+a mousemove never rebuilds the element under the cursor. `showDashTip()` positions the fixed
+`#dash-tip` tooltip.
+
+**Right — category panel (`loadBreakdown` → `renderBreakdown`, `#breakdown-panel`)**: sticky,
+tinted throughout with `color-mix()` on the selected category's `CAT_COLORS` hue so the chart
+selection and the list read as one object. Month + category pills, `↑`/`↓` category nav,
+search, three sort modes, then a scrolling grid (checkbox · date · description · Actual Source ·
+amount · % · edit). `toggleBpEdit(id)` opens an inline form editing description / amount /
+category / Actual Source (`paid_by`); `saveBpEdit(id)` PATCHes `/api/transactions/<id>`.
+Checking rows reveals a dark bulk bar whose "Move to" applies a category to every selected row
+via parallel PATCHes (`applyBpBulk`). Every mutation raises a 5s toast with **Undo**, which
+replays the pre-change field snapshot held in `_dashUndo` back through the same PATCH route.
+
+`↑`/`↓` cycle categories (by descending amount within the focused month) whenever the
+dashboard is the active view, no modal is open, and focus is not in a form field.
+
+The design reference this was built from is `docs/Tally Dashboard.html` (a bundled Claude
+Design prototype; its real source is the `__bundler/template` script tag inside it).
 
 ## Branding
 
