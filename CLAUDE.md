@@ -232,7 +232,8 @@ a mousemove never rebuilds the element under the cursor. `showDashTip()` positio
 **Right — category panel (`loadBreakdown` → `renderBreakdown`, `#breakdown-panel`)**: sticky,
 tinted throughout with `color-mix()` on the selected category's `CAT_COLORS` hue so the chart
 selection and the list read as one object. Month + category pills, `↑`/`↓` category nav,
-search, three sort modes, then a scrolling grid (checkbox · date · description · Actual Source ·
+then a `SEARCH` box and a `SORT BY` pill group (Amount / Date / A–Z) as two labelled
+sections, then a scrolling grid (checkbox · date · description · Actual Source ·
 amount · % · edit). `toggleBpEdit(id)` opens an inline form editing description / amount /
 category / Actual Source (`paid_by`); `saveBpEdit(id)` PATCHes `/api/transactions/<id>`.
 Checking rows reveals a dark bulk bar whose "Move to" applies a category to every selected row

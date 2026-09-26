@@ -189,8 +189,14 @@
     @media (hover: hover) and (pointer: fine) {
       .bp-nav-btn:hover { background: var(--surface-hover); }
     }
-    .bp-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .bp-tools .search-input { flex: 1 1 180px; min-width: 0; padding: 6px 10px; }
+    /* Search and sort are two labelled groups — the sort pills are meaningless
+       without a label telling you what they act on. */
+    .bp-tools { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+    .bp-tool { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .bp-tool-search { flex: 1 1 200px; }
+    .bp-tool-sort { flex: 0 0 auto; }
+    .bp-tool-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--ink-3); }
+    .bp-tools .search-input { width: 100%; padding: 6px 10px; }
     .bp-sorts { display: flex; gap: 6px; }
     .bp-sorts .month-pill { padding: 4px 12px; }
 
@@ -1609,11 +1615,17 @@ function renderBreakdown() {
         </span>
       </div>
       <div class="bp-tools">
-        <input class="search-input" id="bp-search" placeholder="Search this category…" value="${escAttr(dashQuery)}" oninput="onBpQuery(this.value)">
-        <span class="bp-sorts">
-          ${[['amount', 'Amount'], ['date', 'Date'], ['name', 'A–Z']].map(([k, label]) =>
-            `<span class="month-pill ${dashSort === k ? 'active' : ''}" onclick="setBpSort('${k}')">${label}</span>`).join('')}
-        </span>
+        <div class="bp-tool bp-tool-search">
+          <label class="bp-tool-label" for="bp-search">SEARCH</label>
+          <input class="search-input" id="bp-search" placeholder="Search this category…" value="${escAttr(dashQuery)}" oninput="onBpQuery(this.value)">
+        </div>
+        <div class="bp-tool bp-tool-sort">
+          <span class="bp-tool-label">SORT BY</span>
+          <span class="bp-sorts">
+            ${[['amount', 'Amount'], ['date', 'Date'], ['name', 'A–Z']].map(([k, label]) =>
+              `<span class="month-pill ${dashSort === k ? 'active' : ''}" onclick="setBpSort('${k}')">${label}</span>`).join('')}
+          </span>
+        </div>
       </div>
     </div>
     <div class="bp-grid bp-thead" style="background:color-mix(in srgb, ${color} 9%, var(--surface));border-bottom-color:color-mix(in srgb, ${color} 30%, var(--line))">
