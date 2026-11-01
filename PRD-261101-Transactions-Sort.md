@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-01
 **Author:** Shan Sebastian (with Claude Code)
-**Status:** Draft — pending implementation
+**Status:** Implemented 2026-11-01
 
 ---
 
@@ -106,6 +106,7 @@ All in `templates/index.html`; no backend change.
 | `txSortDir` meaning flips | Any code reading `txSortDir` with the old meaning breaks. | Only `renderTxTable`, `txSort` and `txSortLabel` read it — all rewritten together. |
 | Not persisted | A deep link with filters opens on Newest first, not the sort you had. | Decided (§3). |
 | Native select styling | The open menu uses the OS look (as in the mockup), not Tally's custom Period/Statement menus. | Accepted for accessibility and simplicity. |
+| Statement Date column | `statement_date` is stored in each bank's own format (`15/10/2026`, `18 OKT 2026`), so string-sorting it is meaningless. | Sorts by `upload_statement_month` instead (added during implementation). |
 | Inline edits | Editing an amount or category doesn't move the row until the next re-render. | Same as today; avoids rows jumping under the cursor. |
 
 ---

@@ -269,6 +269,15 @@ transactions"; Esc / × / outside click discard it. Active hidden filters show a
 - **Summary line** (`renderTxSummary`): count of `allTxRows`, net total, per-direction
   "X owes Y" for unsettled rows meeting the settlement rule (see **Settlement Logic**); re-rendered by
   `renderTxTable()` and by `patchTx` after inline edits
+- **Sort** (`PRD-261101-Transactions-Sort.md`): client-side over `txRows` via `compareTx`.
+  `txSortDir` is `1` = ascending, `-1` = descending; default newest first (`resetTxSort()` runs on
+  every `initTransactions()` — sort is deliberately not persisted, not in the URL, untouched by
+  Clear all). The summary line's native `<select>` (`renderTxSortControl`, options in
+  `TX_SORT_OPTIONS`) and header clicks (`txSort`, `.th-sort` + `data-sort-key`, ▲/▼ + `aria-sort`)
+  share that state; a header sort with no matching option shows as a temporary "Account A–Z"-style
+  option. First header click: dates/amounts descending, text ascending (`TX_SORT_FIRST_DIR`).
+  Ties: date desc, then id desc; empty values always last. Statement Date sorts by
+  `upload_statement_month` because `statement_date` is in each bank's own format
 - Table, inline editing, bulk actions and Export are unchanged by the redesign
 
 ## Dashboard Layout

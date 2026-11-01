@@ -570,6 +570,15 @@
     .tx-summary { display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: baseline; font-size: 13px; color: var(--ink-2); padding: 0 4px; margin-bottom: 12px; }
     .tx-summary strong { color: var(--ink); font-variant-numeric: tabular-nums; }
     .tx-summary .tx-owe, .tx-summary .tx-owe strong { color: var(--warning-ink); }
+    .tx-sort { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px 0 12px; border: 1px solid var(--line-strong); border-radius: var(--r-btn); background: var(--surface); color: var(--ink); font-size: 13px; transition: border-color var(--dur-fast) ease; }
+    .tx-sort .k { color: var(--ink-2); }
+    .tx-sort .v { font-weight: 500; }
+    .tx-sort select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 13px; }
+    .tx-sort:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .tx-summary { align-items: center; }
+    .tx-table th:not(.th-sort) { cursor: default; }
+    .tx-table th.th-sort[aria-sort] { color: var(--ink); }
+    .th-arrow { margin-left: 4px; font-size: 9px; color: var(--accent); }
     .tx-empty { padding: 40px 16px; text-align: center; color: var(--ink-2); }
     .tx-empty p { margin: 0 0 10px; }
     @media (hover: hover) {
@@ -579,6 +588,8 @@
       .tx-link-btn:hover { background: var(--accent-soft); }
       .tx-menu-opt:hover { background: var(--bg); }
       .tx-icon-btn:hover { background: var(--bg); }
+      .tx-sort:hover { border-color: var(--ink-3); }
+      .tx-table th:not(.th-sort):hover { background: var(--surface-sunken); }
     }
 
     /* ── FLOATING ACTION BAR ──
@@ -786,21 +797,21 @@
     <div class="tx-summary" id="tx-summary"></div>
     <div class="table-wrap">
       <div class="tx-scroll">
-        <table style="width:100%;min-width:1100px">
+        <table class="tx-table" style="width:100%;min-width:1100px">
           <thead>
             <tr>
               <th style="text-align:center;width:40px;min-width:40px"><input type="checkbox" id="chk-all" onchange="toggleAllTx(this.checked)"></th>
-              <th style="min-width:96px" onclick="txSort('date_parsed')">Date</th>
-              <th style="min-width:140px" onclick="txSort('category')">Category</th>
-              <th style="min-width:220px" onclick="txSort('description')">Expense Items Detail</th>
-              <th style="min-width:120px;text-align:right" onclick="txSort('amount')">Amount (Rp)</th>
+              <th class="th-sort" data-sort-key="date_parsed" style="min-width:96px" onclick="txSort('date_parsed')">Date</th>
+              <th class="th-sort" data-sort-key="category" style="min-width:140px" onclick="txSort('category')">Category</th>
+              <th class="th-sort" data-sort-key="description" style="min-width:220px" onclick="txSort('description')">Expense Items Detail</th>
+              <th class="th-sort" data-sort-key="amount" style="min-width:120px;text-align:right" onclick="txSort('amount')">Amount (Rp)</th>
               <th style="text-align:center">Real?</th>
               <th>Paid By</th>
               <th>Actual Source</th>
               <th>Ideal Source</th>
               <th style="text-align:center">Settled?</th>
-              <th onclick="txSort('account_name')" style="min-width:140px">Account</th>
-              <th onclick="txSort('statement_date')" style="min-width:100px">Statement Date</th>
+              <th class="th-sort" data-sort-key="account_name" onclick="txSort('account_name')" style="min-width:140px">Account</th>
+              <th class="th-sort" data-sort-key="statement_date" onclick="txSort('statement_date')" style="min-width:100px">Statement Date</th>
               <th></th>
             </tr>
           </thead>
@@ -1126,7 +1137,7 @@ let allAccounts = [];
 let dashOwner = 'ALL';
 let _dashData = null;
 let txSortKey = 'date_parsed';
-let txSortDir = -1;
+let txSortDir = -1;  // 1 = ascending, -1 = descending; default is newest first
 let txRows = [];
 let selectedTxIds = new Set();
 let selectedStagedIds = new Set();
@@ -1846,6 +1857,7 @@ async function initTransactions() {
       label: `${u.account_name || '—'} · ${parseStatementDateLabel(u.statement_date, u.upload_statement_month)}`,
     }));
 
+  resetTxSort();  // sort is not persisted: every visit opens on newest first
   if (!txFilters) {
     txFilters = txFiltersFromUrl() || txFilterDefaults();
   } else {
@@ -2037,15 +2049,20 @@ function renderTxSummary() {
   el.innerHTML = `<span><strong>${txRows.length}</strong> of ${allTxRows.length} transactions</span>
     <span>Total <strong>${fmtAmount(total)}</strong></span>
     ${owes.length ? `<span class="tx-owe">${owes.join(' · ')}</span>` : ''}
-    <span class="tx-push">Sorted by ${txSortLabel()}</span>`;
+    ${renderTxSortControl()}`;
 }
 
-function txSortLabel() {
-  const asc = txSortDir < 0;  // renderTxTable's comparator puts smaller values first when txSortDir is -1
-  if (txSortKey === 'date_parsed') return asc ? 'date, oldest first' : 'date, newest first';
-  if (txSortKey === 'amount') return asc ? 'amount, smallest first' : 'amount, largest first';
-  const names = { category: 'category', description: 'description', account_name: 'account', statement_date: 'statement date' };
-  return `${names[txSortKey] || txSortKey}, ${asc ? 'A–Z' : 'Z–A'}`;
+function renderTxSortControl() {
+  const match = TX_SORT_OPTIONS.find(([, k, d]) => k === txSortKey && d === txSortDir);
+  // A header sort with no standard option gets a temporary one naming it
+  const custom = match ? null : `${TX_SORT_NAMES[txSortKey] || txSortKey} ${txSortDir > 0 ? 'A–Z' : 'Z–A'}`;
+  const options = TX_SORT_OPTIONS.map(([v, , , l]) => `<option value="${v}" ${match && match[0] === v ? 'selected' : ''}>${l}</option>`).join('') +
+    (custom ? `<option value="custom" selected>${custom}</option>` : '');
+  return `<label class="tx-sort tx-push">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>
+      <span class="k">Sort</span><span class="v">${match ? match[3] : custom}</span>${TX_ICON_CARET}
+      <select aria-label="Sort transactions" onchange="setTxSort(this.value)">${options}</select>
+    </label>`;
 }
 
 // Period / Statement dropdown menus
@@ -2238,19 +2255,73 @@ function initTxFilterEvents() {
 }
 initTxFilterEvents();
 
+// Sort control options (value → key + direction). Header clicks can reach other
+// key/direction pairs; those show as a temporary extra option (see renderTxSortControl).
+const TX_SORT_OPTIONS = [
+  ['newest',      'date_parsed', -1, 'Newest first'],
+  ['oldest',      'date_parsed',  1, 'Oldest first'],
+  ['amount-desc', 'amount',      -1, 'Amount: high to low'],
+  ['amount-asc',  'amount',       1, 'Amount: low to high'],
+  ['category',    'category',     1, 'Category A–Z'],
+];
+// First header click: dates and amounts open newest/largest first, text opens A–Z
+const TX_SORT_FIRST_DIR = { date_parsed: -1, amount: -1, category: 1, description: 1, account_name: 1, statement_date: 1 };
+const TX_SORT_NAMES = { category: 'Category', description: 'Description', account_name: 'Account', statement_date: 'Statement date' };
+
 function txSort(key) {
   if (txSortKey === key) txSortDir *= -1;
-  else { txSortKey = key; txSortDir = -1; }
+  else { txSortKey = key; txSortDir = TX_SORT_FIRST_DIR[key] || 1; }
   renderTxTable();
 }
 
-function renderTxTable() {
-  const sorted = [...txRows].sort((a, b) => {
-    let av = a[txSortKey], bv = b[txSortKey];
-    if (txSortKey === 'amount') { av = +av; bv = +bv; }
-    else { av = (av||'').toString(); bv = (bv||'').toString(); }
-    return av < bv ? txSortDir : av > bv ? -txSortDir : 0;
+function setTxSort(value) {
+  const opt = TX_SORT_OPTIONS.find(o => o[0] === value);
+  if (!opt) return;
+  [, txSortKey, txSortDir] = opt;
+  renderTxTable();
+  document.querySelector('.tx-sort select')?.focus();  // the control was re-rendered
+}
+
+function resetTxSort() {
+  txSortKey = 'date_parsed';
+  txSortDir = -1;
+}
+
+function txSortValue(r, key) {
+  // Statement dates are stored in each bank's own format, so sort by statement month
+  const v = key === 'statement_date' ? r.upload_statement_month : r[key];
+  if (v == null || v === '') return null;
+  return key === 'amount' ? +v : String(v);
+}
+
+function compareTx(a, b) {
+  const av = txSortValue(a, txSortKey), bv = txSortValue(b, txSortKey);
+  if (av === null || bv === null) {
+    if (av !== bv) return av === null ? 1 : -1;  // missing values last, either direction
+  } else if (av !== bv) {
+    return (av < bv ? -1 : 1) * txSortDir;
+  }
+  // Ties: newest date first, then most recently added
+  const ad = a.date_parsed || '', bd = b.date_parsed || '';
+  if (ad !== bd) return ad < bd ? 1 : -1;
+  return b.id - a.id;
+}
+
+function renderTxSortHeaders() {
+  document.querySelectorAll('.tx-table th.th-sort').forEach(th => {
+    th.querySelector('.th-arrow')?.remove();
+    if (th.dataset.sortKey === txSortKey) {
+      th.setAttribute('aria-sort', txSortDir > 0 ? 'ascending' : 'descending');
+      th.insertAdjacentHTML('beforeend', `<span class="th-arrow" aria-hidden="true">${txSortDir > 0 ? '▲' : '▼'}</span>`);
+    } else {
+      th.removeAttribute('aria-sort');
+    }
   });
+}
+
+function renderTxTable() {
+  const sorted = [...txRows].sort(compareTx);
+  renderTxSortHeaders();
 
   const tbody = document.getElementById('tx-body');
   renderTxSummary();
