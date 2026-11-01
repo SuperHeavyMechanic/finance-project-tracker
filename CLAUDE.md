@@ -49,7 +49,7 @@ assets Flask serves at `/static/*` (default Flask static config, no custom wirin
 - `get_upload_file(upload_id)` — returns `(path, ext)` for a pending upload's stored document, or None
 - `mark_manual_coverage(account_id, month)` / `unmark_manual_coverage(account_id, month)` / `get_manual_coverage()` — CRUD on the `manual_coverage` table (`(account_id, month)` composite PK). Purely a user-declared bookkeeping flag for the Statements coverage matrix ("I entered this manually"), not tied to any actual transactions. Automatically cleared by `save_staged()` the moment a real upload lands on the same `(account_id, statement_month)` slot
 - `get_staged(upload_id)` — returns staged rows joined with account info (includes `account_type`)
-- `parse_date(s)` — normalises Indonesian bank date formats (DD/MM/YYYY, DD-Mon-YY, ISO) to YYYY-MM-DD
+- `parse_date(s, ref_date=None)` — normalises bank date formats to YYYY-MM-DD: DD/MM/YYYY, DD-MM-YY, ISO, and month names abbreviated or full, English or Indonesian, with or without separators (`20-Apr-26`, `18 OKT 2026`, `20OCT2026`, `24 Agustus 2026`). Year-less rows (`20SEP`, `09 OKT`, `16/09`) take the year from `ref_date` (the parsed statement date; previous year if the month is later) — the upload route passes it. Unknown month names return None
 - `create_transaction(fields)` — direct insert into `transactions` (manual entry, no upload/staging)
 - `create_account / update_account / delete_account` — full account CRUD
 - `update_transaction(tx_id, fields)` — allowed fields defined by `_ALLOWED_TX_FIELDS` frozenset: `category`, `is_real_expense`, `paid_by`, `ideal_paid_by`, `settled`, `settled_date`, `amount`, `date_parsed`, `description`
