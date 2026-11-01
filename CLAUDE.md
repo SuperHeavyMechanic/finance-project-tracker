@@ -209,7 +209,7 @@ needs a `BANK_NOTES` entry rather than a fix downstream.
 | DELETE | `/api/staged/<id>` | Remove single staged row |
 | POST | `/api/uploads/<id>/confirm` | Confirm: DB staged rows → transactions, clear staged |
 | DELETE | `/api/uploads/<id>` | Delete a statement (pending or confirmed): backup DB, then remove linked transactions + staged rows + upload record + file; returns `{ok, deleted_count}`, 404 if unknown |
-| GET | `/api/transactions` | Filterable list (owner, month, account_id, category, is_real_expense, settled, paid_by, ideal_paid_by, upload_id, q) |
+| GET | `/api/transactions` | Filterable list (owner, month, account_id, category, is_real_expense, settled, paid_by, ideal_paid_by, upload_id, q, wrong_source). `q` matching only an amount ("642.500", "Rp 642.500") also matches rows with that exact rounded absolute amount; `wrong_source=1` = `ideal_paid_by IS NOT NULL AND ideal_paid_by != paid_by` (same as settlements) |
 | POST | `/api/transactions` | Manual entry: direct insert, no upload_id |
 | PATCH | `/api/transactions/<id>` | Update any allowed field (see `_ALLOWED_TX_FIELDS` in db.py) |
 | DELETE | `/api/transactions/<id>` | Delete a confirmed transaction |
@@ -234,6 +234,27 @@ needs a `BANK_NOTES` entry rather than a fix downstream.
 - Dashboard layout is a full-height two-pane workspace (see **Dashboard Layout** below), not stacked summary cards
 - Settlements detail pane: `showSettleDetail(dir, month)` renders cell-level transactions in the right panel; `toggleSdEdit(id)` / `saveSdEdit(id, dir, month)` provide the same inline-edit pattern scoped to the settlements context
 - Dashboard head strip: `renderDeltaStat` (focused month total + MoM delta, respects owner tab) and `renderTargetStat` (budget vs actual with mid-month pace tick; **household-only and pinned to `household_latest_month`** — it ignores both the owner tab and the focused month, so its label spells out which month it refers to, plus a `Household` pill on non-ALL tabs); inline target editing via `toggleBudgetEdit`/`saveBudget` → `PUT /api/budget`
+
+## Transactions Filter Bar
+
+Built from `PRD-261101-Transactions-Filter-Redesign.md`. One state object, `txFilters`
+(defaults from `txFilterDefaults()`), drives the controls, the API params (`txParams`) and the
+URL. Primary row: Search (250ms debounce) · Period · Statement · Status · More filters.
+Hidden filters (`TX_HIDDEN_KEYS`: category, type, owner, actual, ideal, wrong) live in the
+`#tx-more` popover, edited as a draft (`txMoreDraft`) that applies only on "Show N
+transactions"; Esc / × / outside click discard it. Active hidden filters show as chips.
+
+- **Labels keep today's names**: "Paid By" filters `a.owner` (account owner, API `owner`),
+  "Actual Source" = `paid_by`, "Ideal Source" = `ideal_paid_by`
+- **Period** defaults to the latest month with data (`txDefaultPeriod`), `'all'` = All time
+- **Statement overrides Period**: only `upload_id` is sent (card cycles span two months);
+  the Period button is disabled and reads "from statement"
+- **URL state**: non-default filters go into `?view=transactions&…` via `replaceState`;
+  `boot()` deep-links into Transactions; `navigate()` to any other view clears the query
+- **Summary line** (`renderTxSummary`): count of `allTxRows`, net total, per-direction
+  "X owes Y" for unsettled wrong-source rows (same rule as Settlements); re-rendered by
+  `renderTxTable()` and by `patchTx` after inline edits
+- Table, inline editing, bulk actions and Export are unchanged by the redesign
 
 ## Dashboard Layout
 

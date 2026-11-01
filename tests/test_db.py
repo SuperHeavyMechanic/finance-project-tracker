@@ -358,6 +358,49 @@ class TestDeleteUploadApi:
         assert client.delete('/api/uploads/9999').status_code == 404
 
 
+class TestTransactionFilters:
+    """get_transactions() filters added for the Transactions filter bar."""
+
+    def _add(self, acc_id, **kw):
+        fields = {'account_id': acc_id, 'date_parsed': '2026-10-01', 'description': 'Row',
+                  'amount': 1000, 'category': 'GROCERIES', 'paid_by': 'SHAN'}
+        fields.update(kw)
+        db.create_transaction(fields)
+
+    def test_wrong_source(self, fresh_db):
+        acc_id = _account()
+        self._add(acc_id, description='match', paid_by='SHAN', ideal_paid_by='JOINT')
+        self._add(acc_id, description='same', paid_by='SHAN', ideal_paid_by='SHAN')
+        self._add(acc_id, description='no ideal', paid_by='SHAN')
+        rows = db.get_transactions(wrong_source=True)
+        assert [r['description'] for r in rows] == ['match']
+
+    def test_amount_search(self, fresh_db):
+        acc_id = _account()
+        self._add(acc_id, description='Superindo', amount=642500)
+        self._add(acc_id, description='Other', amount=120000)
+        for q in ('642500', '642.500', 'Rp 642.500', 'rp642,500'):
+            assert [r['description'] for r in db.get_transactions(search=q)] == ['Superindo'], q
+
+    def test_amount_search_matches_negative_rows(self, fresh_db):
+        acc_id = _account()
+        self._add(acc_id, description='Refund', amount=-642500)
+        assert len(db.get_transactions(search='642.500')) == 1
+
+    def test_text_search_is_description_only(self, fresh_db):
+        acc_id = _account()
+        self._add(acc_id, description='Superindo groceries', amount=642500)
+        assert len(db.get_transactions(search='superindo')) == 1
+        assert db.get_transactions(search='superindo 642') == []
+
+    def test_wrong_source_api(self, client):
+        acc_id = _account()
+        self._add(acc_id, description='match', paid_by='SHAN', ideal_paid_by='JANICE')
+        self._add(acc_id, description='same', paid_by='SHAN', ideal_paid_by='SHAN')
+        rows = client.get('/api/transactions?wrong_source=1').get_json()
+        assert [r['description'] for r in rows] == ['match']
+
+
 class TestManualCoverage:
     """Manual coverage marks a (account, month) cell as 'entered by hand' —
     purely a bookkeeping flag, cleared automatically once a real upload lands there."""

@@ -517,12 +517,68 @@
     tr.tx-selected td:first-child { border-left: 3px solid var(--accent); padding-left: 11px; }
 
     /* ── FILTER SECTION ── */
-    .filter-section { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
-    .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .filter-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); flex-shrink: 0; width: 38px; }
-    .filter-clear-btn { font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: var(--r-sm); margin-left: auto; flex-shrink: 0; transition: background-color var(--dur-fast) ease; }
-    @media (hover: hover) and (pointer: fine) {
-      .filter-clear-btn:hover { background: var(--accent-soft); }
+    /* Transactions filter bar: primary row + chips + More filters popover */
+    .tx-filter-card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); padding: 12px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+    .tx-frow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .tx-search { flex: 1 1 280px; min-width: 0; position: relative; color: var(--ink-3); }
+    .tx-search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+    .tx-search input { width: 100%; height: 36px; padding: 0 12px 0 34px; border: 1px solid var(--line-strong); border-radius: var(--r-btn); font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); outline: none; transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+    .tx-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .tx-ctl { height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px 0 12px; border: 1px solid var(--line-strong); border-radius: var(--r-btn); background: var(--surface); font: inherit; font-size: 13px; color: var(--ink); cursor: pointer; white-space: nowrap; max-width: 320px; transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease; }
+    .tx-ctl > span:not(.k):not(.tx-badge) { overflow: hidden; text-overflow: ellipsis; }
+    .tx-ctl .k { color: var(--ink-2); }
+    .tx-ctl.on { border-color: var(--accent); background: var(--accent-soft); }
+    .tx-ctl[aria-expanded="true"] { box-shadow: 0 0 0 3px var(--accent-soft-border); }
+    .tx-ctl:disabled { cursor: default; color: var(--ink-3); background: var(--bg); }
+    .tx-ctl:disabled .k { color: var(--ink-3); }
+    .tx-more-btn { font-weight: 600; }
+    .tx-badge { min-width: 18px; height: 18px; border-radius: var(--r-pill); background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; padding: 0 5px; }
+    .tx-seg { display: inline-flex; height: 36px; padding: 3px; border: 1px solid var(--line-strong); border-radius: var(--r-btn); background: var(--surface); gap: 2px; }
+    .tx-seg.on { border-color: var(--accent); }
+    .tx-seg button { border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--ink-2); padding: 0 12px; border-radius: var(--r-sm); cursor: pointer; white-space: nowrap; transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease; }
+    .tx-seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+    .tx-seg.full { width: 100%; }
+    .tx-seg.full button { flex: 1; }
+    .tx-chips { padding-top: 10px; border-top: 1px dashed var(--line); }
+    .tx-chips[hidden], .tx-menu[hidden], .tx-more[hidden], .tx-link-btn[hidden] { display: none; }
+    .tx-section-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); margin: 0 4px 0 0; }
+    .tx-chip { display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 3px 0 11px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-strong); border: 1px solid var(--accent-soft-border); font-size: 12px; font-weight: 500; }
+    .tx-chip button { width: 22px; height: 22px; border: 0; background: transparent; border-radius: var(--r-pill); color: inherit; display: grid; place-items: center; cursor: pointer; padding: 0; }
+    .tx-link-btn { border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 8px; border-radius: var(--r-sm); }
+    .tx-push { margin-left: auto; }
+    .tx-menu { position: absolute; z-index: 60; min-width: 180px; max-width: 360px; max-height: 320px; overflow-y: auto; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-md); padding: 4px; display: flex; flex-direction: column; }
+    .tx-menu-opt { flex-shrink: 0; text-align: left; border: 0; background: transparent; font: inherit; font-size: 13px; color: var(--ink); padding: 7px 10px; border-radius: var(--r-sm); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tx-menu-opt[aria-selected="true"] { font-weight: 600; color: var(--accent-strong); background: var(--accent-soft); }
+    .tx-menu-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .tx-more { position: absolute; top: 58px; right: 12px; width: 440px; max-width: calc(100% - 24px); z-index: 60; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
+    .tx-more-head, .tx-more-foot { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; }
+    .tx-more-head { border-bottom: 1px solid var(--line); }
+    .tx-more-foot { border-top: 1px solid var(--line); }
+    .tx-more-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
+    .tx-icon-btn { width: 32px; height: 32px; border: 0; background: transparent; border-radius: var(--r-btn); display: grid; place-items: center; color: var(--ink-2); cursor: pointer; }
+    .tx-more-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .tx-fld { display: flex; flex-direction: column; gap: 6px; }
+    .tx-fld label, .tx-fld .tx-lbl { font-size: 12px; font-weight: 600; color: var(--ink); }
+    .tx-fld select { width: 100%; }
+    .tx-hint { font-size: 12px; color: var(--ink-2); line-height: 1.45; margin: 0; }
+    .tx-divider { height: 1px; background: var(--line); }
+    .tx-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .tx-check-card { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-md); cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease; }
+    .tx-check-card:has(input:checked) { border-color: var(--accent-soft-border); background: var(--accent-soft); }
+    .tx-check-card input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); }
+    .tx-check-card strong { display: block; font-size: 13px; margin-bottom: 2px; }
+    .tx-summary { display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: baseline; font-size: 13px; color: var(--ink-2); padding: 0 4px; margin-bottom: 12px; }
+    .tx-summary strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+    .tx-summary .tx-owe, .tx-summary .tx-owe strong { color: var(--warning-ink); }
+    .tx-empty { padding: 40px 16px; text-align: center; color: var(--ink-2); }
+    .tx-empty p { margin: 0 0 10px; }
+    @media (hover: hover) {
+      .tx-ctl:not(:disabled):hover { border-color: var(--ink-3); }
+      .tx-seg button[aria-pressed="false"]:hover { background: var(--bg); color: var(--ink); }
+      .tx-chip button:hover { background: var(--accent-soft-border); }
+      .tx-link-btn:hover { background: var(--accent-soft); }
+      .tx-menu-opt:hover { background: var(--bg); }
+      .tx-icon-btn:hover { background: var(--bg); }
     }
 
     /* ── FLOATING ACTION BAR ──
@@ -711,48 +767,24 @@
         <button class="btn btn-outline btn-sm" onclick="openExportModal()">Export CSV</button>
       </div>
     </div>
-    <div class="table-wrap">
-      <div class="filter-section">
-        <div class="filter-row">
-          <span class="filter-tag">Filter</span>
-          <input class="search-input" id="tx-search" placeholder="Search…" oninput="loadTransactions()" style="flex:1;min-width:140px;">
-          <select class="filter-select" id="tx-month" onchange="loadTransactions()">
-            <option value="">All Months</option>
-          </select>
-          <select class="filter-select" id="tx-category" onchange="loadTransactions()">
-            <option value="">All Categories</option>
-          </select>
-          <select class="filter-select" id="tx-real" onchange="loadTransactions()">
-            <option value="">Real / Non</option>
-            <option value="1">Real expenses</option>
-            <option value="0">Non-expenses</option>
-          </select>
-          <button class="filter-clear-btn" onclick="clearFilters()">Clear all</button>
+    <section class="tx-filter-card" id="tx-filter-card" aria-label="Filters">
+      <div class="tx-frow">
+        <div class="tx-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input type="search" id="tx-search" aria-label="Search transactions" placeholder="Search description or amount" oninput="onTxSearch(this.value)">
         </div>
-        <div class="filter-row">
-          <span class="filter-tag" style="visibility:hidden">Filter</span>
-          <select class="filter-select" id="tx-owner" onchange="loadTransactions()">
-            <option value="">Paid By</option>
-            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
-          </select>
-          <select class="filter-select" id="tx-paid-by" onchange="loadTransactions()">
-            <option value="">Actual Source</option>
-            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
-          </select>
-          <select class="filter-select" id="tx-ideal-paid-by" onchange="loadTransactions()">
-            <option value="">Ideal Source</option>
-            <option>SHAN</option><option>JANICE</option><option>JOINT</option>
-          </select>
-          <select class="filter-select" id="tx-settled" onchange="loadTransactions()">
-            <option value="">Settled / All</option>
-            <option value="1">Settled</option>
-            <option value="0">Unsettled</option>
-          </select>
-          <select class="filter-select" id="tx-upload" onchange="loadTransactions()" style="min-width:160px;">
-            <option value="">All Statements</option>
-          </select>
-        </div>
+        <button type="button" class="tx-ctl" id="tx-period-btn" aria-haspopup="listbox" aria-expanded="false" onclick="toggleTxMenu('period', this)"></button>
+        <button type="button" class="tx-ctl" id="tx-statement-btn" aria-haspopup="listbox" aria-expanded="false" onclick="toggleTxMenu('statement', this)"></button>
+        <div class="tx-seg" id="tx-status-seg" role="group" aria-label="Settlement status"></div>
+        <button type="button" class="tx-ctl tx-more-btn" id="tx-more-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="tx-more" onclick="toggleTxMore()"></button>
+        <button type="button" class="tx-link-btn" id="tx-clear-inline" onclick="clearTxFilters()" hidden>Clear all</button>
       </div>
+      <div class="tx-frow tx-chips" id="tx-chips" hidden></div>
+      <div class="tx-menu" id="tx-menu" role="listbox" hidden></div>
+      <div class="tx-more" id="tx-more" role="dialog" aria-modal="false" aria-labelledby="tx-more-title" hidden></div>
+    </section>
+    <div class="tx-summary" id="tx-summary"></div>
+    <div class="table-wrap">
       <div class="tx-scroll">
         <table style="width:100%;min-width:1100px">
           <thead>
@@ -1111,6 +1143,7 @@ function navigate(view) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.dataset.view === view));
   document.getElementById('view-' + view).classList.add('active');
+  if (view !== 'transactions' && location.search) history.replaceState(null, '', location.pathname);
   if (view === 'dashboard') loadDashboard();
   if (view === 'transactions') initTransactions();
   if (view === 'settlements') loadSettlements();
@@ -1783,12 +1816,9 @@ let exportScope = null;
 async function initTransactions() {
   allTxRows = await api('/api/transactions');
 
-  // Populate month filter
-  const months = [...new Set(allTxRows.map(r => r.date_parsed?.slice(0,7)).filter(Boolean))].sort().reverse();
-  const monthSel = document.getElementById('tx-month');
-  const curMon = monthSel.value;
-  monthSel.innerHTML = '<option value="">All Months</option>' +
-    months.map(m => `<option value="${m}" ${m===curMon?'selected':''}>${fmtMonth(m)}</option>`).join('');
+  // Months with data, newest first — the Period menu and its default
+  txMonths = [...new Set(allTxRows.map(r => r.date_parsed?.slice(0,7)).filter(Boolean))].sort().reverse();
+  txDefaultPeriod = txMonths[0] || 'all';
 
   // Populate card statement filter from full unfiltered set
   const uploadMap = new Map();
@@ -1802,12 +1832,14 @@ async function initTransactions() {
       label: `${u.account_name || '—'} · ${parseStatementDateLabel(u.statement_date, u.upload_statement_month)}`,
     }));
 
-  const uploadSel = document.getElementById('tx-upload');
-  if (uploadSel) {
-    const curUpload = uploadSel.value;
-    uploadSel.innerHTML = '<option value="">All Statements</option>' +
-      allUploads.map(u => `<option value="${u.uploadId}" ${u.uploadId==curUpload?'selected':''}>${u.label}</option>`).join('');
+  if (!txFilters) {
+    txFilters = txFiltersFromUrl() || txFilterDefaults();
+  } else {
+    // Keep filters across visits, but drop values whose data has since gone
+    if (txFilters.period !== 'all' && !txMonths.includes(txFilters.period)) txFilters.period = txDefaultPeriod;
+    if (txFilters.statement && !allUploads.some(u => String(u.uploadId) === txFilters.statement)) txFilters.statement = '';
   }
+  document.getElementById('tx-search').value = txFilters.q;
 
   // Populate action bar category select
   const abarCat = document.getElementById('abar-cat');
@@ -1820,29 +1852,375 @@ async function initTransactions() {
 }
 
 async function loadTransactions() {
-  const params = new URLSearchParams();
-  const q       = document.getElementById('tx-search').value;
-  const own     = document.getElementById('tx-owner').value;
-  const mon     = document.getElementById('tx-month').value;
-  const cat     = document.getElementById('tx-category').value;
-  const real    = document.getElementById('tx-real').value;
-  const paidBy  = document.getElementById('tx-paid-by').value;
-  const idealPB = document.getElementById('tx-ideal-paid-by').value;
-  const settled = document.getElementById('tx-settled').value;
-  const upload  = document.getElementById('tx-upload').value;
-  if (q)       params.set('q', q);
-  if (own)     params.set('owner', own);
-  if (mon)     params.set('month', mon);
-  if (cat)     params.set('category', cat);
-  if (real)    params.set('is_real_expense', real);
-  if (paidBy)  params.set('paid_by', paidBy);
-  if (idealPB) params.set('ideal_paid_by', idealPB);
-  if (settled) params.set('settled', settled);
-  if (upload)  params.set('upload_id', upload);
-
-  txRows = await api('/api/transactions?' + params);
+  const seq = ++txLoadSeq;
+  const rows = await api('/api/transactions?' + txParams(txFilters));
+  if (seq !== txLoadSeq) return;  // a newer filter change already superseded this one
+  txRows = rows;
+  renderTxFilterBar();
+  txFiltersToUrl();
   renderTxTable();
 }
+
+// ── TRANSACTIONS FILTER BAR ──
+// One state object (txFilters) drives the controls, the API params and the URL.
+// Hidden filters live behind "More filters" and are edited as a draft (txMoreDraft)
+// that only applies on "Show N transactions".
+const TX_OWNERS = ['SHAN', 'JANICE', 'JOINT'];
+const TX_HIDDEN_KEYS = ['category', 'type', 'owner', 'actual', 'ideal', 'wrong'];
+const TX_FILTER_NAMES = { category: 'Category', type: 'Type', owner: 'Paid By', actual: 'Actual Source', ideal: 'Ideal Source', wrong: 'Wrong source' };
+const TX_TYPE_LABELS = { real: 'Real spend', transfer: 'Transfers & adjustments' };
+const TX_STATUS_OPTS = [['', 'All'], ['unsettled', 'Unsettled'], ['settled', 'Settled']];
+const TX_ICON_X = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const TX_ICON_CARET = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+const TX_ICON_SLIDERS = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>';
+let txMonths = [];
+let txDefaultPeriod = 'all';
+let txFilters = null;
+let txMoreDraft = null;
+let txMenuKind = null;
+let txLoadSeq = 0;
+let txMoreSeq = 0;
+let txSearchTimer = null;
+let txMoreCountTimer = null;
+
+function txFilterDefaults() {
+  return { q: '', period: txDefaultPeriod, statement: '', status: '', category: '', type: '', owner: '', actual: '', ideal: '', wrong: false };
+}
+
+function txActiveKeys(f = txFilters) {
+  const d = txFilterDefaults();
+  return Object.keys(d).filter(k => f[k] !== d[k]);
+}
+
+function txHiddenActive(f = txFilters) {
+  return txActiveKeys(f).filter(k => TX_HIDDEN_KEYS.includes(k));
+}
+
+function txParams(f) {
+  const p = new URLSearchParams();
+  if (f.q) p.set('q', f.q);
+  // A statement shows exactly its rows; card cycles span two months, so no month filter
+  if (f.statement) p.set('upload_id', f.statement);
+  else if (f.period !== 'all') p.set('month', f.period);
+  if (f.status) p.set('settled', f.status === 'settled' ? '1' : '0');
+  if (f.category) p.set('category', f.category);
+  if (f.type) p.set('is_real_expense', f.type === 'real' ? '1' : '0');
+  if (f.owner) p.set('owner', f.owner);
+  if (f.actual) p.set('paid_by', f.actual);
+  if (f.ideal) p.set('ideal_paid_by', f.ideal);
+  if (f.wrong) p.set('wrong_source', '1');
+  return p;
+}
+
+function txFiltersToUrl() {
+  if (!document.getElementById('view-transactions').classList.contains('active')) return;
+  const p = new URLSearchParams({ view: 'transactions' });
+  txActiveKeys().forEach(k => p.set(k, k === 'wrong' ? '1' : txFilters[k]));
+  history.replaceState(null, '', '?' + p);
+}
+
+function txFiltersFromUrl() {
+  const p = new URLSearchParams(location.search);
+  if (p.get('view') !== 'transactions') return null;
+  // Invalid or stale values (e.g. a deleted statement) fall back to the default
+  const f = txFilterDefaults();
+  if (p.get('q')) f.q = p.get('q');
+  const period = p.get('period');
+  if (period === 'all' || txMonths.includes(period)) f.period = period;
+  const stmt = p.get('statement');
+  if (stmt && allUploads.some(u => String(u.uploadId) === stmt)) f.statement = stmt;
+  if (['unsettled', 'settled'].includes(p.get('status'))) f.status = p.get('status');
+  if (CATEGORIES.includes(p.get('category'))) f.category = p.get('category');
+  if (Object.keys(TX_TYPE_LABELS).includes(p.get('type'))) f.type = p.get('type');
+  ['owner', 'actual', 'ideal'].forEach(k => { if (TX_OWNERS.includes(p.get(k))) f[k] = p.get(k); });
+  if (p.get('wrong') === '1') f.wrong = true;
+  return f;
+}
+
+function setTxFilter(key, val) {
+  txFilters[key] = val;
+  loadTransactions();
+}
+
+function removeTxChip(key) {
+  setTxFilter(key, txFilterDefaults()[key]);
+}
+
+function clearTxFilters() {
+  clearTimeout(txSearchTimer);
+  txFilters = txFilterDefaults();
+  document.getElementById('tx-search').value = '';
+  loadTransactions();
+}
+
+function onTxSearch(val) {
+  clearTimeout(txSearchTimer);
+  txSearchTimer = setTimeout(() => setTxFilter('q', val.trim()), 250);
+}
+
+function txChipLabel(key) {
+  const v = txFilters[key];
+  if (key === 'wrong') return 'Wrong source only';
+  if (key === 'type') return `Type: ${TX_TYPE_LABELS[v]}`;
+  return `${TX_FILTER_NAMES[key]}: ${v}`;
+}
+
+function txStatementLabel(id) {
+  return allUploads.find(u => String(u.uploadId) === id)?.label || '—';
+}
+
+function renderTxFilterBar() {
+  const f = txFilters;
+  const d = txFilterDefaults();
+
+  const periodBtn = document.getElementById('tx-period-btn');
+  const fromStatement = !!f.statement;
+  const periodLabel = fromStatement ? 'from statement' : f.period === 'all' ? 'All time' : fmtMonth(f.period);
+  periodBtn.disabled = fromStatement;
+  periodBtn.classList.toggle('on', !fromStatement && f.period !== d.period);
+  periodBtn.innerHTML = `<span class="k">Period</span><span>${periodLabel}</span>${TX_ICON_CARET}`;
+
+  const stmtBtn = document.getElementById('tx-statement-btn');
+  stmtBtn.classList.toggle('on', fromStatement);
+  stmtBtn.title = fromStatement ? txStatementLabel(f.statement) : '';
+  stmtBtn.innerHTML = `<span class="k">Statement</span><span>${escHtml(fromStatement ? txStatementLabel(f.statement) : 'Any')}</span>${TX_ICON_CARET}`;
+
+  const seg = document.getElementById('tx-status-seg');
+  seg.classList.toggle('on', !!f.status);
+  seg.innerHTML = TX_STATUS_OPTS.map(([v, l]) =>
+    `<button type="button" aria-pressed="${f.status === v}" onclick="setTxFilter('status','${v}')">${l}</button>`).join('');
+
+  const hidden = txHiddenActive();
+  const moreBtn = document.getElementById('tx-more-btn');
+  moreBtn.classList.toggle('on', hidden.length > 0);
+  moreBtn.innerHTML = `${TX_ICON_SLIDERS} More filters${hidden.length ? ` <span class="tx-badge">${hidden.length}</span>` : ''}`;
+
+  const chips = document.getElementById('tx-chips');
+  chips.hidden = !hidden.length;
+  chips.innerHTML = !hidden.length ? '' :
+    '<span class="tx-section-label">Also filtering</span>' +
+    hidden.map(k => `<span class="tx-chip">${escHtml(txChipLabel(k))}<button type="button" aria-label="Remove ${TX_FILTER_NAMES[k]} filter" onclick="removeTxChip('${k}')">${TX_ICON_X}</button></span>`).join('') +
+    '<button type="button" class="tx-link-btn tx-push" onclick="clearTxFilters()">Clear all</button>';
+  // Clear all lives in the chips row; with no chips, show it at the end of the primary row
+  document.getElementById('tx-clear-inline').hidden = hidden.length > 0 || txActiveKeys().length === 0;
+}
+
+function renderTxSummary() {
+  const el = document.getElementById('tx-summary');
+  if (!el || !txFilters) return;
+  const total = txRows.reduce((sum, r) => sum + (+r.amount || 0), 0);
+  // Same per-direction rule as the Settlements page: Ideal Source owes Actual Source
+  const dirs = {};
+  txRows.forEach(r => {
+    if (r.settled || !r.ideal_paid_by || r.ideal_paid_by === r.paid_by) return;
+    const dir = `${r.ideal_paid_by}→${r.paid_by}`;
+    dirs[dir] = (dirs[dir] || 0) + (+r.amount || 0);
+  });
+  const owes = Object.entries(dirs).filter(([, amt]) => amt > 0).sort((a, b) => b[1] - a[1])
+    .map(([dir, amt]) => { const [from, to] = dir.split('→'); return `${from} owes ${to} <strong>${fmtAmount(amt)}</strong>`; });
+  el.innerHTML = `<span><strong>${txRows.length}</strong> of ${allTxRows.length} transactions</span>
+    <span>Total <strong>${fmtAmount(total)}</strong></span>
+    ${owes.length ? `<span class="tx-owe">${owes.join(' · ')}</span>` : ''}
+    <span class="tx-push">Sorted by ${txSortLabel()}</span>`;
+}
+
+function txSortLabel() {
+  const asc = txSortDir < 0;  // renderTxTable's comparator puts smaller values first when txSortDir is -1
+  if (txSortKey === 'date_parsed') return asc ? 'date, oldest first' : 'date, newest first';
+  if (txSortKey === 'amount') return asc ? 'amount, smallest first' : 'amount, largest first';
+  const names = { category: 'category', description: 'description', account_name: 'account', statement_date: 'statement date' };
+  return `${names[txSortKey] || txSortKey}, ${asc ? 'A–Z' : 'Z–A'}`;
+}
+
+// Period / Statement dropdown menus
+function toggleTxMenu(kind, btn) {
+  if (txMenuKind === kind) { closeTxMenu(true); return; }
+  closeTxMore(false);
+  closeTxMenu(false);
+  const opts = kind === 'period'
+    ? [['all', 'All time'], ...txMonths.map(m => [m, fmtMonth(m)])]
+    : [['', 'Any'], ...allUploads.map(u => [String(u.uploadId), u.label])];
+  const menu = document.getElementById('tx-menu');
+  menu.setAttribute('aria-label', kind === 'period' ? 'Period' : 'Statement');
+  menu.innerHTML = opts.map(([v, l]) =>
+    `<button type="button" role="option" class="tx-menu-opt" aria-selected="${v === txFilters[kind]}" data-val="${escHtml(v)}">${escHtml(l)}</button>`).join('');
+  menu.style.minWidth = btn.offsetWidth + 'px';
+  menu.hidden = false;
+  const card = document.getElementById('tx-filter-card');
+  menu.style.left = Math.max(12, Math.min(btn.offsetLeft, card.clientWidth - menu.offsetWidth - 12)) + 'px';
+  menu.style.top = (btn.offsetTop + btn.offsetHeight + 6) + 'px';
+  txMenuKind = kind;
+  btn.setAttribute('aria-expanded', 'true');
+  (menu.querySelector('[aria-selected="true"]') || menu.firstElementChild).focus();
+}
+
+function closeTxMenu(focusBtn) {
+  if (!txMenuKind) return;
+  const btn = document.getElementById(`tx-${txMenuKind}-btn`);
+  btn.setAttribute('aria-expanded', 'false');
+  document.getElementById('tx-menu').hidden = true;
+  txMenuKind = null;
+  if (focusBtn) btn.focus();
+}
+
+// More filters popover
+function toggleTxMore() {
+  if (document.getElementById('tx-more').hidden) openTxMore();
+  else closeTxMore(true);
+}
+
+function openTxMore() {
+  closeTxMenu(false);
+  txMoreDraft = Object.fromEntries(TX_HIDDEN_KEYS.map(k => [k, txFilters[k]]));
+  const el = document.getElementById('tx-more');
+  const ownerSelect = (key, id) => `<select id="${id}" class="filter-select" onchange="setTxDraft('${key}', this.value)">
+      <option value="">Any</option>${TX_OWNERS.map(o => `<option value="${o}">${o}</option>`).join('')}</select>`;
+  const segBtns = (key, opts) => opts.map(([v, l]) =>
+    `<button type="button" data-key="${key}" data-val="${v}" onclick="setTxDraft('${key}','${v}')">${l}</button>`).join('');
+  el.innerHTML = `
+    <div class="tx-more-head">
+      <h2 id="tx-more-title">More filters</h2>
+      <button type="button" class="tx-icon-btn" aria-label="Close" onclick="closeTxMore(true)">${TX_ICON_X}</button>
+    </div>
+    <div class="tx-more-body">
+      <p class="tx-section-label">What</p>
+      <div class="tx-fld">
+        <label for="txm-category">Category</label>
+        <select id="txm-category" class="filter-select" onchange="setTxDraft('category', this.value)">
+          <option value="">Any category</option>${CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="tx-fld">
+        <span class="tx-lbl" id="txm-type-label">Type</span>
+        <div class="tx-seg full" role="group" aria-labelledby="txm-type-label">${segBtns('type', [['', 'All'], ['real', 'Real spend'], ['transfer', 'Transfers &amp; adj.']])}</div>
+        <p class="tx-hint">Real spend is money that left the household. Moves between your own accounts count as transfers.</p>
+      </div>
+      <div class="tx-divider"></div>
+      <p class="tx-section-label">Who paid &amp; from where</p>
+      <div class="tx-fld">
+        <span class="tx-lbl" id="txm-owner-label">Paid By</span>
+        <div class="tx-seg full" role="group" aria-labelledby="txm-owner-label">${segBtns('owner', [['', 'Anyone'], ...TX_OWNERS.map(o => [o, o])])}</div>
+        <p class="tx-hint">Whose card or account the transaction is on.</p>
+      </div>
+      <div class="tx-two">
+        <div class="tx-fld"><label for="txm-actual">Actual Source</label>${ownerSelect('actual', 'txm-actual')}</div>
+        <div class="tx-fld"><label for="txm-ideal">Ideal Source</label>${ownerSelect('ideal', 'txm-ideal')}</div>
+      </div>
+      <label class="tx-check-card">
+        <input type="checkbox" id="txm-wrong" onchange="setTxDraft('wrong', this.checked)">
+        <span><strong>Wrong source only</strong><span class="tx-hint">Actual Source differs from Ideal Source — these are what needs settling.</span></span>
+      </label>
+    </div>
+    <div class="tx-more-foot">
+      <button type="button" class="tx-link-btn" onclick="resetTxDraft()">Reset these</button>
+      <button type="button" class="btn btn-sm" id="txm-apply" onclick="applyTxMore()">Show transactions</button>
+    </div>`;
+  syncTxMoreControls();
+  el.hidden = false;
+  document.getElementById('tx-more-btn').setAttribute('aria-expanded', 'true');
+  document.getElementById('txm-category').focus();
+  refreshTxMoreCount();
+}
+
+function closeTxMore(focusBtn) {
+  const el = document.getElementById('tx-more');
+  if (el.hidden) return;
+  el.hidden = true;
+  txMoreDraft = null;
+  clearTimeout(txMoreCountTimer);
+  const btn = document.getElementById('tx-more-btn');
+  btn.setAttribute('aria-expanded', 'false');
+  if (focusBtn) btn.focus();
+}
+
+// Controls are updated in place (never re-rendered) so focus and the
+// outside-click check keep working while the draft changes
+function syncTxMoreControls() {
+  const d = txMoreDraft;
+  document.getElementById('txm-category').value = d.category;
+  document.getElementById('txm-actual').value = d.actual;
+  document.getElementById('txm-ideal').value = d.ideal;
+  document.getElementById('txm-wrong').checked = d.wrong;
+  document.querySelectorAll('#tx-more [data-key]').forEach(b =>
+    b.setAttribute('aria-pressed', String(d[b.dataset.key] === b.dataset.val)));
+}
+
+function setTxDraft(key, val) {
+  txMoreDraft[key] = val;
+  syncTxMoreControls();
+  refreshTxMoreCount();
+}
+
+function resetTxDraft() {
+  const d = txFilterDefaults();
+  TX_HIDDEN_KEYS.forEach(k => { txMoreDraft[k] = d[k]; });
+  syncTxMoreControls();
+  refreshTxMoreCount();
+}
+
+function refreshTxMoreCount() {
+  clearTimeout(txMoreCountTimer);
+  txMoreCountTimer = setTimeout(async () => {
+    const seq = ++txMoreSeq;
+    const rows = await api('/api/transactions?' + txParams({ ...txFilters, ...txMoreDraft }));
+    const btn = document.getElementById('txm-apply');
+    if (seq !== txMoreSeq || !btn || !txMoreDraft) return;
+    btn.textContent = `Show ${rows.length} transaction${rows.length === 1 ? '' : 's'}`;
+  }, 150);
+}
+
+function applyTxMore() {
+  Object.assign(txFilters, txMoreDraft);
+  closeTxMore(true);
+  loadTransactions();
+}
+
+function initTxFilterEvents() {
+  const menu = document.getElementById('tx-menu');
+  menu.addEventListener('click', e => {
+    const opt = e.target.closest('.tx-menu-opt');
+    if (!opt) return;
+    const kind = txMenuKind;
+    closeTxMenu(true);
+    setTxFilter(kind, opt.dataset.val);
+  });
+  menu.addEventListener('keydown', e => {
+    const opts = [...menu.querySelectorAll('.tx-menu-opt')];
+    const i = opts.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = e.key === 'ArrowDown' ? Math.min(i + 1, opts.length - 1) : Math.max(i - 1, 0);
+      opts[next].focus();
+    } else if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      opts[e.key === 'Home' ? 0 : opts.length - 1].focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeTxMenu(true);
+    } else if (e.key === 'Tab') {
+      closeTxMenu(false);
+    }
+  });
+
+  const more = document.getElementById('tx-more');
+  more.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); closeTxMore(true); return; }
+    if (e.key !== 'Tab') return;
+    // Keep focus inside the popover while it is open
+    const focusables = [...more.querySelectorAll('button, select, input')].filter(el => !el.disabled);
+    const first = focusables[0], last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  // Clicking outside closes the menu / popover; the popover discards its draft
+  document.addEventListener('click', e => {
+    if (!document.contains(e.target)) return;  // target was re-rendered away mid-click
+    if (txMenuKind && !menu.contains(e.target) && !document.getElementById(`tx-${txMenuKind}-btn`).contains(e.target)) closeTxMenu(false);
+    if (!more.hidden && !more.contains(e.target) && !document.getElementById('tx-more-btn').contains(e.target)) closeTxMore(false);
+  });
+}
+initTxFilterEvents();
 
 function txSort(key) {
   if (txSortKey === key) txSortDir *= -1;
@@ -1859,8 +2237,12 @@ function renderTxTable() {
   });
 
   const tbody = document.getElementById('tx-body');
+  renderTxSummary();
   if (!sorted.length) {
-    tbody.innerHTML = '<tr><td colspan="12" class="no-data">No transactions found.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="13" class="tx-empty">
+      <p>No transactions match these filters</p>
+      ${txFilters && txActiveKeys().length ? '<button type="button" class="btn btn-outline btn-sm" onclick="clearTxFilters()">Clear all</button>' : ''}
+    </td></tr>`;
     return;
   }
 
@@ -1930,7 +2312,7 @@ async function patchTx(id, fields, el, badgeClass, classMap) {
     el.className = `inline-select ${badgeClass} ${prefix}`;
   }
   const row = txRows.find(r => r.id === id);
-  if (row) Object.assign(row, fields);
+  if (row) { Object.assign(row, fields); renderTxSummary(); }
 }
 
 function startAmountEdit(spanEl, id, currentAmount) {
@@ -2011,6 +2393,7 @@ async function deleteTx(id) {
   if (!confirm('Permanently delete this transaction? This cannot be undone.')) return;
   await fetch(`/api/transactions/${id}`, {method: 'DELETE'});
   txRows = txRows.filter(r => r.id !== id);
+  allTxRows = allTxRows.filter(r => r.id !== id);
   renderTxTable();
 }
 
@@ -2047,12 +2430,6 @@ function updateActionBar() {
 function clearSelection() {
   selectedTxIds.clear();
   renderTxTable();
-}
-
-function clearFilters() {
-  ['tx-search','tx-month','tx-category','tx-real','tx-owner','tx-paid-by','tx-ideal-paid-by','tx-settled','tx-upload']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  loadTransactions();
 }
 
 async function bulkDelete() {
@@ -3461,7 +3838,8 @@ async function fetchAccounts() {
 
 async function boot() {
   await fetchAccounts();
-  loadDashboard();
+  if (new URLSearchParams(location.search).get('view') === 'transactions') navigate('transactions');
+  else loadDashboard();
 }
 boot();
 </script>

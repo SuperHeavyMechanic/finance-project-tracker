@@ -359,6 +359,7 @@ def api_transactions():
         ideal_paid_by=request.args.get('ideal_paid_by'),
         settled=None if settled_val is None else (settled_val == '1'),
         upload_id=request.args.get('upload_id'),
+        wrong_source=request.args.get('wrong_source') == '1',
     )
     return jsonify(rows)
 

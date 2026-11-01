@@ -318,7 +318,8 @@ def save_upload(account_id, filename, transactions, statement_date=None):
 
 def get_transactions(owner=None, month=None, account_id=None, category=None,
                      is_real_expense=None, unsettled=False, search=None,
-                     paid_by=None, ideal_paid_by=None, settled=None, upload_id=None):
+                     paid_by=None, ideal_paid_by=None, settled=None, upload_id=None,
+                     wrong_source=False):
     conn = get_db()
     q = '''
         SELECT t.*, a.name AS account_name, a.owner AS account_owner, a.bank,
@@ -342,7 +343,14 @@ def get_transactions(owner=None, month=None, account_id=None, category=None,
     if unsettled:
         q += ' AND t.settled=0 AND t.paid_by != a.owner'
     if search:
-        q += ' AND t.description LIKE ?'; p.append(f'%{search}%')
+        # A query that is only an amount ("642500", "642.500", "Rp 642.500") also
+        # matches rows with exactly that rounded absolute amount
+        digits = re.sub(r'^rp|[.,\s]', '', search.strip().lower())
+        if digits.isdigit():
+            q += ' AND (t.description LIKE ? OR CAST(ABS(ROUND(t.amount)) AS INTEGER) = ?)'
+            p += [f'%{search}%', int(digits)]
+        else:
+            q += ' AND t.description LIKE ?'; p.append(f'%{search}%')
     if paid_by:
         q += ' AND t.paid_by=?'; p.append(paid_by)
     if ideal_paid_by:
@@ -351,6 +359,9 @@ def get_transactions(owner=None, month=None, account_id=None, category=None,
         q += ' AND t.settled=?'; p.append(1 if settled else 0)
     if upload_id:
         q += ' AND t.upload_id=?'; p.append(int(upload_id))
+    if wrong_source:
+        # Same predicate as get_settlements(): Ideal Source set and ≠ Actual Source
+        q += ' AND t.ideal_paid_by IS NOT NULL AND t.ideal_paid_by != t.paid_by'
     q += ' ORDER BY t.date_parsed DESC, t.id DESC'
     rows = conn.execute(q, p).fetchall()
     conn.close()

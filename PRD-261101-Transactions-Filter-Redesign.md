@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-01
 **Author:** Shan Sebastian (with Claude Code)
-**Status:** Draft — pending implementation
+**Status:** Implemented 2026-11-01
 
 **Source material:** `filter redesign supporting docs/`
 - `Transactions Filter Bar — Build Spec.md` — the design brief ("Direction A")
@@ -118,14 +118,14 @@ Copy:
 
 - "**N** of **T** transactions" — N = filtered rows, T = `allTxRows.length`.
 - "Total **Rp X**" — **net sum of all filtered rows**, negatives included (ties to what an export of the same rows would sum to).
-- Settle-up line, amber, only when the filtered rows contain unsettled wrong-source rows (`settled = 0` and wrong-source predicate). Nets per pair the same way the Settlements page does: `ideal_paid_by` owes `paid_by`; opposite directions between the same two parties cancel. One clause per non-zero pair, e.g. "JOINT owes SHAN **Rp 2.140.000** · JANICE owes SHAN **Rp 120.000**".
+- Settle-up line, amber, only when the filtered rows contain unsettled wrong-source rows (`settled = 0` and wrong-source predicate). Totals per direction exactly as the Settlements page does (`ideal_paid_by` owes `paid_by`, no netting of opposite directions), one clause per positive direction, largest first, e.g. "JOINT owes SHAN **Rp 2.140.000** · JANICE owes SHAN **Rp 120.000**".
 - Right side: current sort ("Sorted by date ↓"), reflecting `txSortKey` / `txSortDir`.
 - Recomputed on every results change, including after inline edits (`patchTx`) and deletes.
 
 ### 5.6 Search
 
 - Matches description (today's behaviour).
-- **New:** if the query, after stripping `.`, `,`, spaces and an `Rp` prefix, is all digits, also match rows whose rounded absolute amount contains those digits (so "642500", "642.500" and "Rp 642.500" all find Rp 642.500). Server-side, in `get_transactions`.
+- **New:** if the query, after stripping `.`, `,`, spaces and an `Rp` prefix, is all digits, also match rows whose rounded absolute amount **equals** that number (exact, not contains — a contains match on short numbers like 5000 hit 177 rows on real data) (so "642500", "642.500" and "Rp 642.500" all find Rp 642.500). Server-side, in `get_transactions`.
 - No "note" search — Tally has no note field.
 
 ### 5.7 Chips, Clear all, Reset these
@@ -158,7 +158,7 @@ Copy:
 ### 6.1 `db.py` — `get_transactions()`
 
 - New `wrong_source=False` param ⇒ `AND t.ideal_paid_by IS NOT NULL AND t.ideal_paid_by != t.paid_by`.
-- Search: add the amount match from §5.6 alongside the description `LIKE` (`OR CAST(ABS(ROUND(t.amount)) AS INTEGER) LIKE ?`).
+- Search: add the amount match from §5.6 alongside the description `LIKE` (`OR CAST(ABS(ROUND(t.amount)) AS INTEGER) = ?`).
 - Nothing else changes.
 
 ### 6.2 `app.py` — `GET /api/transactions`
