@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transactions — Filter bar (Direction A reference)</title>
+<!--
+  Reference implementation of the Direction A filter bar.
+  Static sample data; interactions are illustrative (popover open/close,
+  segmented toggles, chip removal, Clear all). Wire real data and URL state
+  per the "Transactions Filter Bar — Build Spec".
+-->
+<style>
+:root{
+  --bg:#F4F2EE; --surface:#FFFFFF; --border:#E6E1D8; --control-border:#D8D3C9;
+  --text:#1F1E1B; --muted:#6E6A62; --body:#4A4741;
+  --accent:#2F7A5B; --accent-dark:#245E46; --accent-tint:#EEF5F1; --accent-tint-border:#CFE3D8;
+  --warn:#8A4B0F; --warn-tint:#FBEFDC;
+  --r-control:10px; --r-card:16px; --h-control:44px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Helvetica Neue",Helvetica,Arial,sans-serif}
+.page{max-width:1360px;margin:0 auto;padding:32px 24px;display:flex;flex-direction:column;gap:20px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{margin:0;font-size:36px;font-weight:700;letter-spacing:-.01em}
+.btn{height:var(--h-control);padding:0 18px;border-radius:var(--r-control);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.btn-primary{border:0;background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-dark)}
+.btn-secondary{border:1px solid var(--control-border);background:var(--surface);color:var(--text)}
+.link-btn{border:0;background:transparent;color:var(--accent);font:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:8px}
+
+.filters{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.search{flex:1 1 280px;min-width:0;position:relative}
+.search svg{position:absolute;left:14px;top:13px}
+.search input{width:100%;height:var(--h-control);padding:0 14px 0 42px;border:1px solid var(--control-border);border-radius:var(--r-control);font:inherit;font-size:14px;color:var(--text);background:var(--surface)}
+.ctl{height:var(--h-control);display:inline-flex;align-items:center;gap:8px;padding:0 12px 0 14px;border:1px solid var(--control-border);border-radius:var(--r-control);background:var(--surface);font:inherit;font-size:14px;color:var(--text);cursor:pointer;white-space:nowrap}
+.ctl:hover{border-color:#B9B3A7}
+.ctl .k{color:var(--muted)}
+.ctl.on{border-color:var(--accent);background:var(--accent-tint)}
+.ctl[aria-expanded="true"]{box-shadow:0 0 0 3px var(--accent-tint-border)}
+.badge{min-width:20px;height:20px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;display:inline-grid;place-items:center;padding:0 6px}
+.seg{display:inline-flex;height:var(--h-control);padding:3px;border:1px solid var(--control-border);border-radius:var(--r-control);background:var(--surface);gap:2px}
+.seg button{border:0;background:transparent;font:inherit;font-size:14px;color:var(--body);padding:0 14px;border-radius:7px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--text);color:#fff}
+.seg.full{width:100%}.seg.full button{flex:1}
+
+.chips{padding-top:12px;border-top:1px dashed var(--border)}
+.chips[hidden]{display:none}
+.label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 4px 0 0}
+.chip{display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 4px 0 12px;border-radius:999px;background:var(--accent-tint);color:var(--accent-dark);font-size:13px;border:1px solid var(--accent-tint-border)}
+.chip button{width:24px;height:24px;border:0;background:transparent;border-radius:999px;color:inherit;display:grid;place-items:center;cursor:pointer;padding:0}
+.chip button:hover{background:#D6EADF}
+.push{margin-left:auto}
+
+.popover{position:absolute;top:68px;right:16px;width:440px;max-width:calc(100% - 32px);background:var(--surface);border:1px solid var(--control-border);border-radius:var(--r-card);box-shadow:0 18px 48px rgba(31,30,27,.16);z-index:10;display:flex;flex-direction:column}
+.popover[hidden]{display:none}
+.pop-head,.pop-foot{display:flex;align-items:center;justify-content:space-between;padding:14px 20px}
+.pop-head{border-bottom:1px solid #EFEBE4}.pop-foot{border-top:1px solid #EFEBE4}
+.pop-head h2{margin:0;font-size:17px}
+.icon-btn{width:36px;height:36px;border:0;background:transparent;border-radius:8px;display:grid;place-items:center;color:var(--body);cursor:pointer}
+.pop-body{padding:18px 20px;display:flex;flex-direction:column;gap:18px}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label,.fld .lbl{font-size:13px;font-weight:600}
+.fld select{height:var(--h-control);border:1px solid var(--control-border);border-radius:var(--r-control);padding:0 12px;font:inherit;font-size:14px;background:var(--surface);color:var(--text)}
+.hint{font-size:12px;color:var(--muted);line-height:1.45;margin:0}
+.divider{height:1px;background:#EFEBE4}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.check-card{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--control-border);border-radius:12px;cursor:pointer}
+.check-card:has(input:checked){border-color:var(--accent-tint-border);background:var(--accent-tint)}
+.check-card input{width:20px;height:20px;margin:1px 0 0;accent-color:var(--accent)}
+.check-card strong{display:block;font-size:14px;margin-bottom:2px}
+
+.summary{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;font-size:14px;color:var(--body);padding:0 4px}
+.summary strong{color:var(--text);font-variant-numeric:tabular-nums}
+.summary .owe,.summary .owe strong{color:var(--warn)}
+
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:12px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:14px 16px;border-bottom:1px solid #EFEBE4}
+tbody tr:last-child td{border-bottom:0}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mis{color:var(--warn);font-weight:600}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px}
+.p-un{background:var(--warn-tint);color:var(--warn)}
+.p-ok{background:#E7F2EC;color:var(--accent-dark)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <h1>Transactions</h1>
+    <div class="row">
+      <button type="button" class="btn btn-primary">+ Add</button>
+      <button type="button" class="btn btn-secondary">Export 5 rows</button>
+    </div>
+  </div>
+
+  <section class="filters" aria-label="Filters">
+    <!-- Primary row: Search, Period, Statement, Status, More filters -->
+    <div class="row">
+      <div class="search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E6A62" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input type="search" aria-label="Search transactions" placeholder="Search description, note or amount">
+      </div>
+      <button type="button" class="ctl on" aria-haspopup="listbox"><span class="k">Period</span><span>Oct 2026</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <button type="button" class="ctl" aria-haspopup="listbox"><span class="k">Statement</span><span>Any</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="seg" role="group" aria-label="Settlement status">
+        <button type="button" aria-pressed="false">All</button>
+        <button type="button" aria-pressed="true">Unsettled</button>
+        <button type="button" aria-pressed="false">Settled</button>
+      </div>
+      <button type="button" class="ctl on" id="moreBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="morePanel" style="font-weight:600">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        More filters <span class="badge" id="badge">3</span>
+      </button>
+    </div>
+
+    <!-- Chips row: only filters hidden inside More filters -->
+    <div class="row chips" id="chips">
+      <span class="label">Also filtering</span>
+      <span class="chip" data-filter="type">Type: Real spend<button type="button" aria-label="Remove Type filter"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
+      <span class="chip" data-filter="paidBy">Paid by: Shan<button type="button" aria-label="Remove Paid by filter"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
+      <span class="chip" data-filter="wrongSource">Wrong source only<button type="button" aria-label="Remove Wrong source filter"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
+      <button type="button" class="link-btn push" id="clearAll">Clear all</button>
+    </div>
+
+    <!-- More filters popover -->
+    <div class="popover" id="morePanel" role="dialog" aria-modal="false" aria-labelledby="moreTitle" hidden>
+      <div class="pop-head">
+        <h2 id="moreTitle">More filters</h2>
+        <button type="button" class="icon-btn" id="closeMore" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="pop-body">
+        <p class="label">What</p>
+        <div class="fld"><label for="cat">Category</label><select id="cat"><option>Any category</option><option>Groceries</option><option>Utilities</option><option>Household</option></select></div>
+        <div class="fld"><span class="lbl" id="typeL">Type</span>
+          <div class="seg full" role="group" aria-labelledby="typeL"><button type="button" aria-pressed="false">All</button><button type="button" aria-pressed="true">Real spend</button><button type="button" aria-pressed="false" style="flex:1.5">Transfers &amp; adj.</button></div>
+          <p class="hint">Real spend is money that left the household. Moves between your own accounts count as transfers.</p>
+        </div>
+        <div class="divider"></div>
+        <p class="label">Who paid &amp; from where</p>
+        <div class="fld"><span class="lbl" id="paidL">Paid by</span>
+          <div class="seg full" role="group" aria-labelledby="paidL"><button type="button" aria-pressed="false">Anyone</button><button type="button" aria-pressed="true">Shan</button><button type="button" aria-pressed="false">Partner</button><button type="button" aria-pressed="false">Joint</button></div>
+        </div>
+        <div class="two">
+          <div class="fld"><label for="act">Paid from (actual)</label><select id="act"><option>Any account</option><option>Shan</option><option>Partner</option><option>Joint</option></select></div>
+          <div class="fld"><label for="ide">Should come from</label><select id="ide"><option>Any account</option><option>Shan</option><option>Partner</option><option>Joint</option></select></div>
+        </div>
+        <label class="check-card"><input type="checkbox" checked><span><strong>Wrong source only</strong><span class="hint">Paid from a different account than it should have been — these are what needs settling.</span></span></label>
+      </div>
+      <div class="pop-foot">
+        <button type="button" class="link-btn">Reset these</button>
+        <button type="button" class="btn btn-primary" id="applyMore">Show 5 transactions</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="summary">
+    <span><strong>5</strong> of 318 transactions</span>
+    <span>Total <strong>Rp 2.140.000</strong></span>
+    <span class="owe">Joint owes Shan <strong>Rp 2.140.000</strong></span>
+    <span class="push">Sorted by newest</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Paid by</th><th>Source (actual → should be)</th><th>Statement</th><th class="num">Amount</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>28 Oct</td><td>Superindo — weekly groceries</td><td>Groceries</td><td>Shan</td><td><span class="mis">Shan → Joint</span></td><td>Shan · Oct</td><td class="num">Rp 642.500</td><td><span class="pill p-un">Unsettled</span></td></tr>
+        <tr><td>25 Oct</td><td>PLN token — electricity</td><td>Utilities</td><td>Shan</td><td><span class="mis">Shan → Joint</span></td><td>Shan · Oct</td><td class="num">Rp 500.000</td><td><span class="pill p-un">Unsettled</span></td></tr>
+        <tr><td>22 Oct</td><td>Tokopedia — household supplies</td><td>Household</td><td>Shan</td><td><span class="mis">Shan → Joint</span></td><td>Shan · Oct</td><td class="num">Rp 389.000</td><td><span class="pill p-un">Unsettled</span></td></tr>
+        <tr><td>18 Oct</td><td>Water gallon delivery</td><td>Household</td><td>Shan</td><td><span class="mis">Shan → Joint</span></td><td>Shan · Oct</td><td class="num">Rp 120.000</td><td><span class="pill p-un">Unsettled</span></td></tr>
+        <tr><td>12 Oct</td><td>Internet — monthly bill</td><td>Utilities</td><td>Shan</td><td><span class="mis">Shan → Joint</span></td><td>Shan · Oct</td><td class="num">Rp 488.500</td><td><span class="pill p-un">Unsettled</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function () {
+  var moreBtn = document.getElementById('moreBtn');
+  var panel = document.getElementById('morePanel');
+  var chips = document.getElementById('chips');
+  var badge = document.getElementById('badge');
+
+  function openPanel() {
+    panel.hidden = false;
+    moreBtn.setAttribute('aria-expanded', 'true');
+    var first = panel.querySelector('select, button, input');
+    if (first) first.focus();
+  }
+  function closePanel() {
+    panel.hidden = true;
+    moreBtn.setAttribute('aria-expanded', 'false');
+    moreBtn.focus();
+  }
+  function syncChips() {
+    var n = chips.querySelectorAll('.chip').length;
+    badge.textContent = n;
+    badge.hidden = n === 0;
+    moreBtn.classList.toggle('on', n > 0);
+    chips.hidden = n === 0;
+  }
+
+  moreBtn.addEventListener('click', function () { panel.hidden ? openPanel() : closePanel(); });
+  document.getElementById('closeMore').addEventListener('click', closePanel);
+  document.getElementById('applyMore').addEventListener('click', closePanel);
+  panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePanel(); });
+  document.addEventListener('click', function (e) {
+    if (!panel.hidden && !panel.contains(e.target) && !moreBtn.contains(e.target)) closePanel();
+  });
+
+  // Segmented toggles: one pressed per group
+  document.querySelectorAll('.seg').forEach(function (group) {
+    group.addEventListener('click', function (e) {
+      var btn = e.target.closest('button');
+      if (!btn) return;
+      group.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
+    });
+  });
+
+  // Chip removal + Clear all
+  chips.addEventListener('click', function (e) {
+    var x = e.target.closest('.chip button');
+    if (x) { x.closest('.chip').remove(); syncChips(); }
+  });
+  document.getElementById('clearAll').addEventListener('click', function () {
+    chips.querySelectorAll('.chip').forEach(function (c) { c.remove(); });
+    syncChips();
+  });
+})();
+</script>
+</body>
+</html>

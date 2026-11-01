@@ -64,7 +64,7 @@ The three `_ALLOWED_*` frozensets at module level are the authoritative whitelis
 **`rules.py`** — three layers of extraction customisation:
 - `GLOBAL_RULES` — keyword → category mappings applied to every account post-extraction
 - `ACCOUNT_RULES` — per-bank keyword → category overrides (bank name substring key)
-- `BANK_NOTES` — per-bank free-text notes injected into the Claude prompt before the output schema; describes bank-specific quirks (date formats, how to parse descriptions, sections to skip). BCA debit notes live here. Add new bank patterns here first.
+- `BANK_NOTES` — per-bank free-text notes injected into the Claude prompt before the output schema; describes bank-specific quirks (date formats, how to parse descriptions, sections to skip). Entries exist for BCA (debit), BNI, Maybank, HSBC and UOB; keys match as a case-insensitive substring of the account name. Add new bank patterns here first.
 - `build_bank_notes(account_name)` / `build_rules_prompt(account_name)` — produce the injected text blocks
 
 **`app.py`** — Flask routes only; no business logic. Key behaviours:
@@ -77,7 +77,7 @@ The three `_ALLOWED_*` frozensets at module level are the authoritative whitelis
 - Duplicate detection runs before staging; returns `{duplicate:true}` with in-memory transactions so frontend can confirm
 - All write endpoints that accept `category` validate it against the `CATEGORIES` list before calling db functions
 
-**`templates/index.html`** — single-file SPA (~3400 lines). Vanilla JS, no chart library (the trend is drawn with CSS flex bars; Chart.js was removed). Five views via `navigate(view)` (Dashboard, Transactions, Settlements, Accounts, Statements — uploading lives in a modal on Statements). Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `selectedStagedIds` (Set), `_reviewCtx`, `pendingUploadId`, `pendingDuplicate`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`. Dashboard state: `dashOwner`, `_dashData`, `dashMonth`, `dashCat`, `dashRows`, `dashChecked` (Set), `dashSort`, `dashQuery`, `dashEditId`, `dashHoverCat`, `dashBulkCat`, `_dashUndo`.
+**`templates/index.html`** — single-file SPA (~3900 lines). Vanilla JS, no chart library (the trend is drawn with CSS flex bars; Chart.js was removed). Five views via `navigate(view)` (Dashboard, Transactions, Settlements, Accounts, Statements — uploading lives in a modal on Statements). Key frontend state: `allAccounts`, `txRows`, `allTxRows`, `selectedTxIds` (Set), `selectedStagedIds` (Set), `_reviewCtx`, `pendingUploadId`, `pendingDuplicate`, `settleOwnerFilter`, `pendingSettleIds`, `_settleByMonth`, `_settleMonths`, `_stmtUploads` (Statements delete lookup). Transactions filter state: `txFilters`, `txMoreDraft`, `txMonths`, `txDefaultPeriod`, `txMenuKind`. Dashboard state: `dashOwner`, `_dashData`, `dashMonth`, `dashCat`, `dashRows`, `dashChecked` (Set), `dashSort`, `dashQuery`, `dashEditId`, `dashHoverCat`, `dashBulkCat`, `_dashUndo`.
 
 ## Data Model
 
@@ -174,12 +174,18 @@ The Settlements view Outstanding tab renders a **matrix table** (rows = debtor d
 
 To handle a new bank's quirks: add an entry to `BANK_NOTES` in `rules.py`. Only change `app.py` prompts for structural changes that affect all banks.
 
+When writing a bank note:
+- Tell Claude to output `date` and `statement_date` as **DD/MM/YYYY**, saying which date column is the transaction date and which header date is the statement (print) date, not the due date. The credit prompt otherwise keeps the printed format, and year-less formats only parse because `parse_date` falls back to the statement year
+- Spell out the number format (e.g. comma = thousands separator) and how credits are marked (`CR` suffix → negative amount, `is_real_expense` false)
+- **Never paste card numbers, account numbers or cardholder names from a real statement** — `rules.py` is pushed to GitHub. Use placeholders like `<card number>`
+- Sample PDFs live in `statement_samples/` (gitignored, often password-protected). To check a note, decrypt with `pypdf` and read the text, or run the file through `POST /api/upload` with `db.DB_PATH` pointed at a copy of the DB — an existing `(account, month)` returns `{duplicate:true}` with the extracted rows and stages nothing
+
 ## Date & Statement Naming Convention
 
 All dates displayed as **DD-Mmm-YY** (e.g. `20-Apr-26`).
 - `fmtDate(date_parsed)` — formats YYYY-MM-DD → DD-Mmm-YY
 - `fmtDateObj(d)` — formats a JS Date object → DD-Mmm-YY (shared helper)
-- `parseStatementDateLabel(statementDate, statementMonth)` — handles raw PDF date formats (DD/MM/YYYY or ISO) and YYYY-MM month strings; falls back to last day of month when only month is available
+- `parseStatementDateLabel(statementDate, statementMonth)` — handles raw PDF date formats (DD/MM/YYYY, DD-MM-YYYY, ISO, and month-name forms like `20OCT2026` / `18 OKT 2026` / `24 Agustus 2026` via `STMT_MONTH_NAME_RE` + `STMT_MONTH_MAP`, which mirror `db._MONTH_MAP`) and YYYY-MM month strings; falls back to last day of month when only month is available
 - `stmtRef(bank, statement_date, statement_month)` — renders statement badge using `parseStatementDateLabel`
 
 `statement_date` in the DB is stored in the **original PDF format** (e.g. `"11/04/2026"`), not ISO. Always use `parseStatementDateLabel` to display it, never `fmtDate` directly.
@@ -237,7 +243,7 @@ needs a `BANK_NOTES` entry rather than a fix downstream.
 
 ## Transactions Filter Bar
 
-Built from `PRD-261101-Transactions-Filter-Redesign.md`. One state object, `txFilters`
+Built from `PRD-261101-Transactions-Filter-Redesign.md` (design source: `filter redesign supporting docs/`). One state object, `txFilters`
 (defaults from `txFilterDefaults()`), drives the controls, the API params (`txParams`) and the
 URL. Primary row: Search (250ms debounce) · Period · Statement · Status · More filters.
 Hidden filters (`TX_HIDDEN_KEYS`: category, type, owner, actual, ideal, wrong) live in the
