@@ -156,11 +156,19 @@ that delete. The backups dir derives from `DB_PATH`, so tests write under `tmp_p
 
 ## Settlement Logic
 
-Settlement is needed when **`ideal_paid_by ≠ paid_by`** (Ideal Source ≠ Actual Source). This is distinct from `paid_by ≠ account_owner`.
+Settlement is needed when **`ideal_paid_by ≠ paid_by`** (Ideal Source ≠ Actual Source) **and** the row is a real-spend charge (`is_real_expense=1 AND amount>0`). This is distinct from `paid_by ≠ account_owner`.
 
 - `ideal_paid_by` = who *should* pay for the transaction
 - `paid_by` = who *actually* paid (Actual Source)
 - When they differ, `ideal_paid_by` owes `paid_by` a reimbursement
+- Card payments, own-account transfers, refunds/credits and anything with Real? unticked never create a debt
+- Owed amounts are summed **per direction** over unsettled rows; opposite directions (A owes B vs B owes A) are shown separately, never netted
+
+The rule lives in one place, `_SETTLEMENT_PREDICATE` in `db.py`, used by `get_settlements()` and by the
+Transactions `wrong_source` filter. The Transactions summary line (`renderTxSummary`) re-applies the same
+conditions client-side — change all three together, or the Transactions "X owes Y" stops matching the
+Settlements page (this happened once: the summary skipped the real-spend/positive-amount conditions and
+overstated JOINT's debts by ~Rp 44M).
 
 The Settlements view Outstanding tab renders a **matrix table** (rows = debtor direction, columns = months). Clicking an amount cell opens a sticky 40% right-panel (`#settle-detail-pane`) showing that cell's transactions with inline editing. Key functions: `showSettleDetail(dir, month)` — populates the detail pane and highlights the clicked cell; `toggleSdEdit(id)` / `saveSdEdit(id, dir, month)` — inline edit form that PATCHes `/api/transactions/<id>` then reloads. Module-level `_settleByMonth` and `_settleMonths` cache the last API response so the detail pane can re-render without a new fetch. `POST /api/settlements/settle` bulk-settles a list of IDs with a given date.
 
@@ -259,7 +267,7 @@ transactions"; Esc / × / outside click discard it. Active hidden filters show a
 - **URL state**: non-default filters go into `?view=transactions&…` via `replaceState`;
   `boot()` deep-links into Transactions; `navigate()` to any other view clears the query
 - **Summary line** (`renderTxSummary`): count of `allTxRows`, net total, per-direction
-  "X owes Y" for unsettled wrong-source rows (same rule as Settlements); re-rendered by
+  "X owes Y" for unsettled rows meeting the settlement rule (see **Settlement Logic**); re-rendered by
   `renderTxTable()` and by `patchTx` after inline edits
 - Table, inline editing, bulk actions and Export are unchanged by the redesign
 
