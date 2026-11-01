@@ -246,10 +246,11 @@ needs a `BANK_NOTES` entry rather than a fix downstream.
 Built from `PRD-261101-Transactions-Filter-Redesign.md` (design source: `filter redesign supporting docs/`). One state object, `txFilters`
 (defaults from `txFilterDefaults()`), drives the controls, the API params (`txParams`) and the
 URL. Primary row: Search (250ms debounce) · Period · Statement · Status · More filters.
-Hidden filters (`TX_HIDDEN_KEYS`: category, type, owner, actual, ideal, wrong) live in the
+Hidden filters (`TX_HIDDEN_KEYS`: category, real, owner, actual, ideal, wrong) live in the
 `#tx-more` popover, edited as a draft (`txMoreDraft`) that applies only on "Show N
 transactions"; Esc / × / outside click discard it. Active hidden filters show as chips.
 
+- **Real spend?** (All · Yes · No, URL `real=yes|no`) filters `is_real_expense`, i.e. the table's Real? column
 - **Labels keep today's names**: "Paid By" filters `a.owner` (account owner, API `owner`),
   "Actual Source" = `paid_by`, "Ideal Source" = `ideal_paid_by`
 - **Period** defaults to the latest month with data (`txDefaultPeriod`), `'all'` = All time

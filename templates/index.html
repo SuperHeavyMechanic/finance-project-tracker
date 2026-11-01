@@ -1880,9 +1880,9 @@ async function loadTransactions() {
 // Hidden filters live behind "More filters" and are edited as a draft (txMoreDraft)
 // that only applies on "Show N transactions".
 const TX_OWNERS = ['SHAN', 'JANICE', 'JOINT'];
-const TX_HIDDEN_KEYS = ['category', 'type', 'owner', 'actual', 'ideal', 'wrong'];
-const TX_FILTER_NAMES = { category: 'Category', type: 'Type', owner: 'Paid By', actual: 'Actual Source', ideal: 'Ideal Source', wrong: 'Wrong source' };
-const TX_TYPE_LABELS = { real: 'Real spend', transfer: 'Transfers & adjustments' };
+const TX_HIDDEN_KEYS = ['category', 'real', 'owner', 'actual', 'ideal', 'wrong'];
+const TX_FILTER_NAMES = { category: 'Category', real: 'Real spend?', owner: 'Paid By', actual: 'Actual Source', ideal: 'Ideal Source', wrong: 'Wrong source' };
+const TX_REAL_LABELS = { yes: 'Yes', no: 'No' };
 const TX_STATUS_OPTS = [['', 'All'], ['unsettled', 'Unsettled'], ['settled', 'Settled']];
 const TX_ICON_X = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 const TX_ICON_CARET = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
@@ -1898,7 +1898,7 @@ let txSearchTimer = null;
 let txMoreCountTimer = null;
 
 function txFilterDefaults() {
-  return { q: '', period: txDefaultPeriod, statement: '', status: '', category: '', type: '', owner: '', actual: '', ideal: '', wrong: false };
+  return { q: '', period: txDefaultPeriod, statement: '', status: '', category: '', real: '', owner: '', actual: '', ideal: '', wrong: false };
 }
 
 function txActiveKeys(f = txFilters) {
@@ -1918,7 +1918,7 @@ function txParams(f) {
   else if (f.period !== 'all') p.set('month', f.period);
   if (f.status) p.set('settled', f.status === 'settled' ? '1' : '0');
   if (f.category) p.set('category', f.category);
-  if (f.type) p.set('is_real_expense', f.type === 'real' ? '1' : '0');
+  if (f.real) p.set('is_real_expense', f.real === 'yes' ? '1' : '0');
   if (f.owner) p.set('owner', f.owner);
   if (f.actual) p.set('paid_by', f.actual);
   if (f.ideal) p.set('ideal_paid_by', f.ideal);
@@ -1945,7 +1945,7 @@ function txFiltersFromUrl() {
   if (stmt && allUploads.some(u => String(u.uploadId) === stmt)) f.statement = stmt;
   if (['unsettled', 'settled'].includes(p.get('status'))) f.status = p.get('status');
   if (CATEGORIES.includes(p.get('category'))) f.category = p.get('category');
-  if (Object.keys(TX_TYPE_LABELS).includes(p.get('type'))) f.type = p.get('type');
+  if (Object.keys(TX_REAL_LABELS).includes(p.get('real'))) f.real = p.get('real');
   ['owner', 'actual', 'ideal'].forEach(k => { if (TX_OWNERS.includes(p.get(k))) f[k] = p.get(k); });
   if (p.get('wrong') === '1') f.wrong = true;
   return f;
@@ -1975,7 +1975,7 @@ function onTxSearch(val) {
 function txChipLabel(key) {
   const v = txFilters[key];
   if (key === 'wrong') return 'Wrong source only';
-  if (key === 'type') return `Type: ${TX_TYPE_LABELS[v]}`;
+  if (key === 'real') return `Real spend?: ${TX_REAL_LABELS[v]}`;
   return `${TX_FILTER_NAMES[key]}: ${v}`;
 }
 
@@ -2105,9 +2105,9 @@ function openTxMore() {
         </select>
       </div>
       <div class="tx-fld">
-        <span class="tx-lbl" id="txm-type-label">Type</span>
-        <div class="tx-seg full" role="group" aria-labelledby="txm-type-label">${segBtns('type', [['', 'All'], ['real', 'Real spend'], ['transfer', 'Transfers &amp; adj.']])}</div>
-        <p class="tx-hint">Real spend is money that left the household. Moves between your own accounts count as transfers.</p>
+        <span class="tx-lbl" id="txm-real-label">Real spend?</span>
+        <div class="tx-seg full" role="group" aria-labelledby="txm-real-label">${segBtns('real', [['', 'All'], ['yes', 'Yes'], ['no', 'No']])}</div>
+        <p class="tx-hint">Follows the Real? column. No covers card payments, transfers between your own accounts, refunds, and anything you've unticked.</p>
       </div>
       <div class="tx-divider"></div>
       <p class="tx-section-label">Who paid &amp; from where</p>

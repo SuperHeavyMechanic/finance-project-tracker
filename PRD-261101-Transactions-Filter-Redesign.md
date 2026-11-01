@@ -70,7 +70,7 @@ The Transactions filter bar (`#view-transactions`, `templates/index.html`) has 9
 | Statement | Statement | "Any" + one option per upload (existing `allUploads` labels) | Any | Dropdown button "Statement · Any" | Primary row |
 | Settled | Status | All · Unsettled · Settled | All | 3-segment toggle | Primary row |
 | Category | Category | "Any category" + `CATEGORIES` | Any | Select | More filters › What |
-| Real / Non | Type | All · Real spend · Transfers & adjustments | All | 3-segment toggle + hint | More filters › What |
+| Real / Non | Real spend? | All · Yes · No | All | 3-segment toggle + hint | More filters › What |
 | Account owner | **Paid By** | Anyone · SHAN · JANICE · JOINT | Anyone | 4-segment toggle | More filters › Who paid & from where |
 | `paid_by` | **Actual Source** | "Any" + SHAN · JANICE · JOINT | Any | Select | More filters › Who paid & from where |
 | `ideal_paid_by` | **Ideal Source** | "Any" + SHAN · JANICE · JOINT | Any | Select | More filters › Who paid & from where |
@@ -218,6 +218,7 @@ Copy:
 
 | Spec says | This PRD | Why |
 |---|---|---|
+| Type: Real spend · Transfers & adjustments | Real spend?: All · Yes · No | Changed 2026-11-01: "Transfers & adjustments" mislabelled rows simply unticked in Real? (e.g. fuel). |
 | Partner | JANICE | Real owner name in Tally. |
 | "Paid by" / "Paid from (actual)" / "Should come from" | Paid By / Actual Source / Ideal Source | Decision 4. |
 | Statement locks Period to its calendar month | Statement overrides Period; no month filter sent | Card cycles span two months (Decision 2). |
