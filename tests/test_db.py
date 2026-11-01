@@ -404,8 +404,18 @@ class TestTransactionFilters:
         self._add(acc_id, description='match', paid_by='SHAN', ideal_paid_by='JOINT')
         self._add(acc_id, description='same', paid_by='SHAN', ideal_paid_by='SHAN')
         self._add(acc_id, description='no ideal', paid_by='SHAN')
+        self._add(acc_id, description='not real', paid_by='SHAN', ideal_paid_by='JOINT', is_real_expense=False)
+        self._add(acc_id, description='refund', paid_by='SHAN', ideal_paid_by='JOINT', amount=-500)
         rows = db.get_transactions(wrong_source=True)
         assert [r['description'] for r in rows] == ['match']
+
+    def test_wrong_source_matches_settlements(self, fresh_db):
+        acc_id = _account()
+        self._add(acc_id, paid_by='SHAN', ideal_paid_by='JOINT')
+        self._add(acc_id, paid_by='SHAN', ideal_paid_by='JOINT', is_real_expense=False)
+        self._add(acc_id, paid_by='JANICE', ideal_paid_by='JOINT', amount=-200)
+        ids = lambda rows: sorted(r['id'] for r in rows)
+        assert ids(db.get_transactions(wrong_source=True)) == ids(db.get_settlements())
 
     def test_amount_search(self, fresh_db):
         acc_id = _account()

@@ -57,7 +57,7 @@ assets Flask serves at `/static/*` (default Flask static config, no custom wirin
 - `update_staged(tx_id, fields)` — allowed fields defined by `_ALLOWED_STAGED_FIELDS` frozenset
 - `bulk_settle_transactions(ids, settled_date)` — marks a list of transaction IDs as `settled=1` with the given date in one query
 - `get_setting(key)` / `set_setting(key, value)` — generic key-value store (`settings` table); the household monthly budget lives under key `monthly_budget`
-- `get_settlements()` — returns transactions where `ideal_paid_by IS NOT NULL AND ideal_paid_by != paid_by` (Ideal Source ≠ Actual Source); **not** `paid_by != account_owner`
+- `get_settlements()` — returns transactions matching `_SETTLEMENT_PREDICATE`: `ideal_paid_by IS NOT NULL AND ideal_paid_by != paid_by AND is_real_expense=1 AND amount>0` (Ideal Source ≠ Actual Source, real-spend charges only); **not** `paid_by != account_owner`. The same predicate backs the Transactions `wrong_source` filter and the summary line's "X owes Y", so all three agree
 
 The three `_ALLOWED_*` frozensets at module level are the authoritative whitelist for which columns each update function may touch. Never use f-string SQL outside these functions.
 
@@ -215,7 +215,7 @@ needs a `BANK_NOTES` entry rather than a fix downstream.
 | DELETE | `/api/staged/<id>` | Remove single staged row |
 | POST | `/api/uploads/<id>/confirm` | Confirm: DB staged rows → transactions, clear staged |
 | DELETE | `/api/uploads/<id>` | Delete a statement (pending or confirmed): backup DB, then remove linked transactions + staged rows + upload record + file; returns `{ok, deleted_count}`, 404 if unknown |
-| GET | `/api/transactions` | Filterable list (owner, month, account_id, category, is_real_expense, settled, paid_by, ideal_paid_by, upload_id, q, wrong_source). `q` matching only an amount ("642.500", "Rp 642.500") also matches rows with that exact rounded absolute amount; `wrong_source=1` = `ideal_paid_by IS NOT NULL AND ideal_paid_by != paid_by` (same as settlements) |
+| GET | `/api/transactions` | Filterable list (owner, month, account_id, category, is_real_expense, settled, paid_by, ideal_paid_by, upload_id, q, wrong_source). `q` matching only an amount ("642.500", "Rp 642.500") also matches rows with that exact rounded absolute amount; `wrong_source=1` applies `_SETTLEMENT_PREDICATE` (identical to `get_settlements()`) |
 | POST | `/api/transactions` | Manual entry: direct insert, no upload_id |
 | PATCH | `/api/transactions/<id>` | Update any allowed field (see `_ALLOWED_TX_FIELDS` in db.py) |
 | DELETE | `/api/transactions/<id>` | Delete a confirmed transaction |

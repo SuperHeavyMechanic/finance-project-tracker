@@ -2023,10 +2023,12 @@ function renderTxSummary() {
   const el = document.getElementById('tx-summary');
   if (!el || !txFilters) return;
   const total = txRows.reduce((sum, r) => sum + (+r.amount || 0), 0);
-  // Same per-direction rule as the Settlements page: Ideal Source owes Actual Source
+  // Same rule as the Settlements page (db._SETTLEMENT_PREDICATE): unsettled real-spend
+  // charges where Ideal Source ≠ Actual Source; Ideal Source owes Actual Source
   const dirs = {};
   txRows.forEach(r => {
     if (r.settled || !r.ideal_paid_by || r.ideal_paid_by === r.paid_by) return;
+    if (!r.is_real_expense || !(r.amount > 0)) return;
     const dir = `${r.ideal_paid_by}→${r.paid_by}`;
     dirs[dir] = (dirs[dir] || 0) + (+r.amount || 0);
   });

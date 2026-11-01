@@ -110,6 +110,13 @@ def parse_date(s, ref_date=None):
         return f"{y}-{mo}-{d.zfill(2)}"
     return None
 
+# Rows that need settling: Ideal Source set and ≠ Actual Source, real spend only,
+# charges only (refunds/credits and non-real rows never create a debt). Shared by
+# get_settlements() and the Transactions "Wrong source only" filter so they agree.
+_SETTLEMENT_PREDICATE = '''t.ideal_paid_by IS NOT NULL
+          AND t.ideal_paid_by != t.paid_by
+          AND t.is_real_expense=1 AND t.amount>0'''
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -382,8 +389,7 @@ def get_transactions(owner=None, month=None, account_id=None, category=None,
     if upload_id:
         q += ' AND t.upload_id=?'; p.append(int(upload_id))
     if wrong_source:
-        # Same predicate as get_settlements(): Ideal Source set and ≠ Actual Source
-        q += ' AND t.ideal_paid_by IS NOT NULL AND t.ideal_paid_by != t.paid_by'
+        q += f' AND {_SETTLEMENT_PREDICATE}'
     q += ' ORDER BY t.date_parsed DESC, t.id DESC'
     rows = conn.execute(q, p).fetchall()
     conn.close()
@@ -541,12 +547,10 @@ def get_dashboard_data(owner=None, months=6):
 
 def get_settlements():
     conn = get_db()
-    rows = conn.execute('''
+    rows = conn.execute(f'''
         SELECT t.*, a.name AS account_name, a.owner AS account_owner
         FROM transactions t JOIN accounts a ON a.id=t.account_id
-        WHERE t.ideal_paid_by IS NOT NULL
-          AND t.ideal_paid_by != t.paid_by
-          AND t.is_real_expense=1 AND t.amount>0
+        WHERE {_SETTLEMENT_PREDICATE}
         ORDER BY t.settled ASC, t.date_parsed DESC
     ''').fetchall()
     conn.close()
