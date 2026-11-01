@@ -15,7 +15,7 @@ from db import (init_db, get_accounts, create_account, update_account, delete_ac
                 save_upload, save_staged, check_duplicate,
                 get_transactions, get_transactions_by_ids, update_transaction, delete_transaction,
                 create_transaction, get_staged, update_staged, delete_staged_tx, confirm_upload,
-                discard_upload, get_dashboard_data, get_settlements, bulk_settle_transactions,
+                delete_upload, get_dashboard_data, get_settlements, bulk_settle_transactions,
                 get_statements, parse_date, _dominant_month, get_setting, set_setting,
                 get_upload_file, mark_manual_coverage, unmark_manual_coverage, get_manual_coverage)
 from rules import apply_rules, build_rules_prompt, build_bank_notes
@@ -554,9 +554,11 @@ def api_confirm_upload(upload_id):
 
 
 @app.route('/api/uploads/<int:upload_id>', methods=['DELETE'])
-def api_discard_upload(upload_id):
-    discard_upload(upload_id)
-    return jsonify({'ok': True})
+def api_delete_upload(upload_id):
+    deleted = delete_upload(upload_id)
+    if deleted is None:
+        return jsonify({'error': 'Upload not found'}), 404
+    return jsonify({'ok': True, 'deleted_count': deleted})
 
 
 if __name__ == '__main__':

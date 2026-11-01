@@ -2,7 +2,7 @@ import sqlite3
 import os
 import re
 import glob
-from datetime import date
+from datetime import date, datetime
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'finance.db')
 
@@ -20,6 +20,32 @@ def _delete_statement_file(upload_id):
             os.remove(path)
         except OSError:
             pass
+
+BACKUPS_KEPT = 10
+
+def _backups_dir():
+    return os.path.join(os.path.dirname(DB_PATH), 'backups')
+
+def _backup_db(label):
+    # Snapshot the whole DB before a destructive action. No in-app restore:
+    # stop the app and copy the chosen file over data/finance.db by hand.
+    os.makedirs(_backups_dir(), exist_ok=True)
+    stamp = datetime.now().strftime('%Y-%m-%d_%H%M%S_%f')
+    path = os.path.join(_backups_dir(), f"finance-{stamp}-{label}.db")
+    src = sqlite3.connect(DB_PATH)
+    dst = sqlite3.connect(path)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    old = sorted(glob.glob(os.path.join(_backups_dir(), 'finance-*.db')))[:-BACKUPS_KEPT]
+    for f in old:
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+    return path
 
 SEED_ACCOUNTS = [
     {'owner': 'SHAN',  'name': 'CC BNI VISA GARUDA',        'bank': 'BNI',           'last_four': '3738', 'account_type': 'credit'},
@@ -542,6 +568,9 @@ def get_statements():
                u.original_total_amount AS original_total,
                COUNT(t.id) AS active_count,
                COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END), 0) AS active_total,
+               COALESCE(SUM(CASE WHEN t.settled = 1 THEN 1 ELSE 0 END), 0) AS settled_count,
+               COALESCE(SUM(CASE WHEN t.settled = 0 AND t.ideal_paid_by IS NOT NULL
+                                  AND t.ideal_paid_by != t.paid_by THEN 1 ELSE 0 END), 0) AS outstanding_settle_count,
                (SELECT COUNT(*) FROM staged_transactions st WHERE st.upload_id = u.id) AS staged_count
         FROM uploads u
         LEFT JOIN transactions t ON t.upload_id = u.id
@@ -705,13 +734,25 @@ def confirm_upload(upload_id):
     return len(staged)
 
 
-def discard_upload(upload_id):
+def delete_upload(upload_id):
+    """Remove a statement entirely — pending or confirmed. Confirmed transactions
+    linked to it go too. Returns the number of confirmed transactions deleted,
+    or None if the upload does not exist."""
     conn = get_db()
+    exists = conn.execute('SELECT 1 FROM uploads WHERE id=?', (upload_id,)).fetchone()
+    conn.close()
+    if not exists:
+        return None
+    _backup_db(f"before-delete-upload-{upload_id}")
+    conn = get_db()
+    # Children first: transactions/staged reference uploads(id) with foreign_keys ON
+    deleted = conn.execute('DELETE FROM transactions WHERE upload_id=?', (upload_id,)).rowcount
     conn.execute('DELETE FROM staged_transactions WHERE upload_id=?', (upload_id,))
     conn.execute('DELETE FROM uploads WHERE id=?', (upload_id,))
     conn.commit()
     conn.close()
     _delete_statement_file(upload_id)
+    return deleted
 
 
 def get_upload_file(upload_id):

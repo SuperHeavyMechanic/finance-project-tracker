@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-01
 **Author:** Shan Sebastian (with Claude Code)
-**Status:** Draft — pending implementation
+**Status:** Implemented 2026-11-01
 
 ---
 

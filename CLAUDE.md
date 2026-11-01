@@ -45,7 +45,7 @@ assets Flask serves at `/static/*` (default Flask static config, no custom wirin
 - `init_db()` — creates tables, runs `ALTER TABLE` migrations, seeds missing accounts from `SEED_ACCOUNTS` (per-account upsert by `bank + last_four`); also sweeps orphaned statement files from `data/statements/`
 - `save_staged(account_id, filename, transactions, statement_date, summary, file_bytes, file_ext)` — creates the upload record and writes transactions to `staged_transactions`; this is the main upload path. `summary` = printed statement figures (generic keys `prev_balance/credits_total/debits_total/new_balance`); `file_bytes`+`file_ext` persist the (decrypted) source document to `data/statements/<upload_id>.<ext>` while the review is pending
 - `confirm_upload(upload_id)` — inserts only `transaction_type='DB'` staged rows into `transactions`, then deletes all staged rows for that upload **and the stored statement file**
-- `discard_upload(upload_id)` — deletes all staged rows + the upload record entirely **and the stored statement file**
+- `delete_upload(upload_id)` — removes a statement entirely, pending or confirmed: its confirmed `transactions` (by `upload_id`), staged rows, the upload record **and the stored statement file**. Snapshots the DB first via `_backup_db()` (see **Backups**). Deletes children before the parent because `foreign_keys = ON` and the FKs have no `ON DELETE`. Returns the confirmed-row count, or `None` for an unknown id
 - `get_upload_file(upload_id)` — returns `(path, ext)` for a pending upload's stored document, or None
 - `mark_manual_coverage(account_id, month)` / `unmark_manual_coverage(account_id, month)` / `get_manual_coverage()` — CRUD on the `manual_coverage` table (`(account_id, month)` composite PK). Purely a user-declared bookkeeping flag for the Statements coverage matrix ("I entered this manually"), not tied to any actual transactions. Automatically cleared by `save_staged()` the moment a real upload lands on the same `(account_id, statement_month)` slot
 - `get_staged(upload_id)` — returns staged rows joined with account info (includes `account_type`)
@@ -125,7 +125,7 @@ Frontend opens review modal (immediate after upload, or via Statements "Review �
   toggled via "Hide/Show statement"; absent when no stored file (pre-feature uploads)
   Review: inline edit category/description/amount/real, delete rows
   Confirm → POST /api/uploads/<id>/confirm → confirm_upload() → DB rows → transactions; file deleted
-  Discard → DELETE /api/uploads/<id> → discard_upload() → upload + staged + file deleted
+  Discard → DELETE /api/uploads/<id> → delete_upload() → upload + staged + file deleted
 
 POST /api/upload/confirm  (duplicate override path)
   → same as above but skips duplicate check; calls save_staged() directly.
@@ -137,6 +137,22 @@ POST /api/transactions  (manual entry path)
 
 Statement files live only while a review is pending — `data/statements/` is empty whenever
 nothing is awaiting review (confirm/discard delete the file; `init_db()` sweeps orphans).
+
+Any statement row on the Statements page — pending or confirmed — has a **Delete** button
+(`deleteStatement(uploadId)`). The native confirm spells out the transaction count/total and,
+when non-zero, how many rows are settled (`settled_count`) or have an outstanding settlement
+(`outstanding_settle_count`) — both returned per upload by `get_statements()`. Confirming calls
+the same `DELETE /api/uploads/<id>` as review-modal Discard, removing every linked transaction;
+the coverage cell reverts to missing and the slot no longer trips duplicate detection.
+
+### Backups
+
+`delete_upload()` copies the whole DB (`sqlite3` `backup()`) to
+`data/backups/finance-<timestamp>-before-delete-upload-<id>.db` before deleting anything; only
+the newest `BACKUPS_KEPT` (10) are kept. A failed backup aborts the delete. There is **no
+in-app restore** by design — to roll back: stop the app, `cp data/backups/<file>.db
+data/finance.db`, start the app. That rewinds the entire DB, including anything done after
+that delete. The backups dir derives from `DB_PATH`, so tests write under `tmp_path`.
 
 ## Settlement Logic
 
@@ -192,7 +208,7 @@ needs a `BANK_NOTES` entry rather than a fix downstream.
 | PATCH | `/api/staged/<id>` | Edit staged row (category, description, amount, is_real_expense) |
 | DELETE | `/api/staged/<id>` | Remove single staged row |
 | POST | `/api/uploads/<id>/confirm` | Confirm: DB staged rows → transactions, clear staged |
-| DELETE | `/api/uploads/<id>` | Discard: delete staged rows + upload record |
+| DELETE | `/api/uploads/<id>` | Delete a statement (pending or confirmed): backup DB, then remove linked transactions + staged rows + upload record + file; returns `{ok, deleted_count}`, 404 if unknown |
 | GET | `/api/transactions` | Filterable list (owner, month, account_id, category, is_real_expense, settled, paid_by, ideal_paid_by, upload_id, q) |
 | POST | `/api/transactions` | Manual entry: direct insert, no upload_id |
 | PATCH | `/api/transactions/<id>` | Update any allowed field (see `_ALLOWED_TX_FIELDS` in db.py) |

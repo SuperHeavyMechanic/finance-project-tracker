@@ -245,7 +245,11 @@
     .dash-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 550; background: var(--header-bg); color: var(--header-ink); padding: 10px 18px; border-radius: var(--r-pill); font-size: 13px; box-shadow: var(--shadow-lg); display: flex; gap: 14px; align-items: center; }
     .dash-toast-undo { background: none; border: none; cursor: pointer; color: var(--accent-on-dark); font-weight: 600; font-size: 13px; }
     /* display:flex above would defeat the hidden attribute on its own */
-    .dash-tip[hidden], .dash-toast[hidden] { display: none; }
+.dash-tip[hidden], .dash-toast[hidden] { display: none; }
+    .btn-danger-outline { background: var(--surface); color: var(--danger); border: 1px solid var(--danger-soft-border); }
+    @media (hover: hover) {
+      .btn-danger-outline:hover { background: var(--danger-soft); }
+    }
 
     /* Below the two-pane breakpoint the panes stack and stop pinning to the viewport. */
     @media (max-width: 1040px) {
@@ -822,6 +826,7 @@
     </div>
     <div id="stmt-coverage"></div>
     <div id="statements-list"></div>
+    <div class="dash-toast" id="stmt-toast" hidden></div>
   </div>
 
 </main>
@@ -2586,9 +2591,13 @@ function jumpToStatementRow(uploadId) {
   row.classList.add('stmt-row-flash');
 }
 
+let _stmtUploads = {};  // upload id → {upload, account}, for the delete confirm message
+
 async function loadStatements() {
   await fetchAccounts();
   const [data, manual] = await Promise.all([api('/api/statements'), api('/api/manual-coverage')]);
+  _stmtUploads = {};
+  data.forEach(g => g.uploads.forEach(u => { _stmtUploads[u.id] = {upload: u, account: g.account}; }));
   renderCoverageMatrix(data, manual);
   const el = document.getElementById('statements-list');
   if (!data.length) {
@@ -2620,6 +2629,7 @@ async function loadStatements() {
             <span class="pending-badge">Pending Review</span>
             <button class="btn btn-sm btn-outline" style="margin-left:8px;font-size:11px;padding:4px 10px;" onclick="openReviewModal(${u.id})">Review →</button>
           ` : ''}
+          <button class="btn btn-sm btn-danger-outline" style="margin-left:${isPending ? 8 : 0}px;font-size:11px;padding:4px 10px;" onclick="deleteStatement(${u.id})">Delete</button>
         </td>
       </tr>`;
     }).join('');
@@ -2636,6 +2646,50 @@ async function loadStatements() {
       </table></div></div>
     </div>`;
   }).join('');
+}
+
+async function deleteStatement(uploadId) {
+  const entry = _stmtUploads[uploadId];
+  if (!entry) return;
+  const {upload: u, account: acc} = entry;
+  const dateLabel = parseStatementDateLabel(u.statement_date, u.statement_month);
+  const label = `${(acc.bank || '').toUpperCase()}${dateLabel !== '—' ? ' · ' + dateLabel : ''}`;
+  const n = u.active_count || 0;
+  let msg;
+  if (n === 0) {
+    const staged = u.staged_count || 0;
+    msg = `Delete statement ${label}?\n\n` +
+      (staged ? `${staged} staged transaction${staged > 1 ? 's' : ''} awaiting review will be removed.\n\n` : '') +
+      'This cannot be undone.';
+  } else {
+    msg = `Delete statement ${label}?\n\n` +
+      `This permanently removes ${n} transaction${n > 1 ? 's' : ''} (${fmtAmount(u.active_total)}) from Tally, ` +
+      `including any edits you made to their category or source.\n`;
+    if (u.settled_count) msg += `\n⚠ ${u.settled_count} of them ${u.settled_count > 1 ? 'are' : 'is'} already settled — ${u.settled_count > 1 ? 'they' : 'it'} will disappear from settlement history.`;
+    if (u.outstanding_settle_count) msg += `\n⚠ ${u.outstanding_settle_count} ${u.outstanding_settle_count > 1 ? 'have' : 'has'} an outstanding settlement — ${u.outstanding_settle_count > 1 ? 'those amounts' : 'that amount'} will drop out of Settlements.`;
+    msg += '\n\nThis cannot be undone.';
+  }
+  if (!confirm(msg)) return;
+  const r = await fetch(`/api/uploads/${uploadId}`, {method: 'DELETE'});
+  if (!r.ok) {
+    alert('Could not delete this statement. Nothing was changed.');
+    return;
+  }
+  const {deleted_count} = await r.json();
+  if (pendingUploadId === uploadId) pendingUploadId = null;
+  showStmtToast(deleted_count
+    ? `Statement deleted · ${deleted_count} transaction${deleted_count > 1 ? 's' : ''} removed`
+    : 'Statement deleted');
+  loadStatements();
+}
+
+let _stmtToastTimer = null;
+function showStmtToast(msg) {
+  const el = document.getElementById('stmt-toast');
+  el.innerHTML = `<span>${escHtml(msg)}</span>`;
+  el.hidden = false;
+  clearTimeout(_stmtToastTimer);
+  _stmtToastTimer = setTimeout(() => { el.hidden = true; }, 5000);
 }
 
 // ── UPLOAD ──

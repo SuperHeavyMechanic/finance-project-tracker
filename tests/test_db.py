@@ -251,7 +251,7 @@ class TestStatementFileLifecycle:
 
     def test_file_deleted_on_discard(self, fresh_db):
         upload_id, path = self._stage_with_file()
-        db.discard_upload(upload_id)
+        db.delete_upload(upload_id)
         assert not os.path.exists(path)
 
     def test_no_file_when_none_given(self, fresh_db):
@@ -267,6 +267,95 @@ class TestStatementFileLifecycle:
         db.init_db()
         assert not os.path.exists(stray)
         assert os.path.exists(pending_path)  # pending review must survive the sweep
+
+
+class TestDeleteUpload:
+    """delete_upload() removes a statement and every transaction linked to it."""
+
+    def _confirmed(self, n=3, month='04'):
+        acc_id = _account()
+        upload_id, _ = db.save_staged(acc_id, 't.pdf', [_tx() for _ in range(n)],
+                                      statement_date=f'30/{month}/2026')
+        db.confirm_upload(upload_id)
+        return acc_id, upload_id
+
+    def _tx_ids(self, upload_id):
+        return [t['id'] for t in db.get_transactions(upload_id=upload_id)]
+
+    def test_confirmed_upload_and_transactions_removed(self, fresh_db):
+        acc_id, upload_id = self._confirmed(n=3)
+        assert db.delete_upload(upload_id) == 3
+        assert db.get_transactions(upload_id=upload_id) == []
+        assert db.get_statements() == []
+
+    def test_other_rows_untouched(self, fresh_db):
+        acc_id, upload_id = self._confirmed(n=2)
+        upload_b, _ = db.save_staged(acc_id, 'b.pdf', [_tx()], statement_date='31/05/2026')
+        db.confirm_upload(upload_b)
+        db.create_transaction({'account_id': acc_id, 'date_parsed': '2026-04-02',
+                               'description': 'Manual', 'amount': 1000,
+                               'category': 'GROCERIES', 'paid_by': 'SHAN'})
+        db.delete_upload(upload_id)
+        remaining = db.get_transactions()
+        assert len(remaining) == 2
+        assert {t['upload_id'] for t in remaining} == {upload_b, None}
+
+    def test_pending_upload_removed(self, fresh_db):
+        acc_id = _account()
+        upload_id, _ = db.save_staged(acc_id, 't.pdf', [_tx(), _tx()], statement_date='30/04/2026')
+        assert db.delete_upload(upload_id) == 0
+        assert db.get_staged(upload_id) == []
+        assert db.get_statements() == []
+
+    def test_slot_freed_for_reupload(self, fresh_db):
+        acc_id, upload_id = self._confirmed()
+        assert db.check_duplicate(acc_id, '2026-04')
+        db.delete_upload(upload_id)
+        assert not db.check_duplicate(acc_id, '2026-04')
+
+    def test_unknown_upload_returns_none(self, fresh_db):
+        assert db.delete_upload(9999) is None
+
+    def test_settlement_counts_then_deleted(self, fresh_db):
+        acc_id, upload_id = self._confirmed(n=3)
+        a, b, _ = self._tx_ids(upload_id)
+        db.update_transaction(a, {'settled': 1, 'settled_date': '2026-05-01'})
+        db.update_transaction(b, {'ideal_paid_by': 'JANICE'})
+        u = db.get_statements()[0]['uploads'][0]
+        assert u['settled_count'] == 1
+        assert u['outstanding_settle_count'] == 1
+        assert db.delete_upload(upload_id) == 3
+        assert db.get_settlements() == []
+
+    def test_backup_written_with_pre_delete_state(self, fresh_db):
+        import sqlite3
+        acc_id, upload_id = self._confirmed(n=3)
+        db.delete_upload(upload_id)
+        backups = os.listdir(db._backups_dir())
+        assert len(backups) == 1
+        assert f'before-delete-upload-{upload_id}' in backups[0]
+        conn = sqlite3.connect(os.path.join(db._backups_dir(), backups[0]))
+        assert conn.execute('SELECT COUNT(*) FROM transactions').fetchone()[0] == 3
+        conn.close()
+
+    def test_only_newest_backups_kept(self, fresh_db):
+        for _ in range(db.BACKUPS_KEPT + 2):
+            _, upload_id = self._confirmed(n=1)
+            db.delete_upload(upload_id)
+        assert len(os.listdir(db._backups_dir())) == db.BACKUPS_KEPT
+
+
+class TestDeleteUploadApi:
+    def test_delete_returns_count(self, client):
+        acc_id = _account()
+        upload_id, _ = db.save_staged(acc_id, 't.pdf', [_tx(), _tx()], statement_date='30/04/2026')
+        db.confirm_upload(upload_id)
+        r = client.delete(f'/api/uploads/{upload_id}')
+        assert r.status_code == 200
+        assert r.get_json() == {'ok': True, 'deleted_count': 2}
+
+    def test_unknown_id_404(self, client):
+        assert client.delete('/api/uploads/9999').status_code == 404
 
 
 class TestManualCoverage:
