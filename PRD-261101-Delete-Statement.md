@@ -100,6 +100,7 @@ def delete_upload(upload_id):
 
 - Order matters (children before parent) because of the FK.
 - One connection, one commit ⇒ atomic. File removal only after commit.
+- **Pre-delete backup (first step, before any DELETE):** copy `DB_PATH` to `data/backups/finance-<YYYY-MM-DD_HHMMSS>-before-delete-upload-<id>.db`, then prune so only the newest 10 backups remain. Use `sqlite3`'s `conn.backup()` rather than a raw file copy so the snapshot is consistent. Backups dir derives from `DB_PATH`'s folder so tests write under `tmp_path`. If the backup fails, abort the delete and return an error.
 
 `get_statements()` adds two counts per upload for the confirm message:
 
@@ -128,13 +129,14 @@ COALESCE(SUM(CASE WHEN t.settled = 0 AND t.ideal_paid_by IS NOT NULL
 - Manual transactions (`upload_id NULL`) and other uploads' transactions untouched.
 - Pending upload: staged rows + upload removed (existing discard behaviour preserved).
 - Stored file removed for pending upload.
+- A backup file exists after delete and opens with the pre-delete row counts; only the newest 10 are kept.
 - After delete, `check_duplicate(account_id, month)` is False.
 - Settled / outstanding transactions are deleted too; `get_statements()` counts are correct beforehand.
 - API: `DELETE /api/uploads/<id>` returns `deleted_count`; unknown id ⇒ 404.
 
 ### 5.5 Docs
 
-Update `CLAUDE.md`: `delete_upload` in db.py list, route table row for `DELETE /api/uploads/<id>`, Upload & Staging Flow note.
+Update `CLAUDE.md`: `delete_upload` in db.py list, the `data/backups/` folder + manual restore steps, route table row for `DELETE /api/uploads/<id>`, Upload & Staging Flow note.
 
 ---
 
@@ -158,9 +160,14 @@ Update `CLAUDE.md`: `delete_upload` in db.py list, route table row for `DELETE /
 
 ## 7. Open questions
 
-1. **Settled rows — warn or block?** Recommendation: warn (current spec). Alternative: refuse deletion while any linked row is settled, forcing the user to unsettle first.
-2. **Detach option?** Offer a second choice "Delete statement, keep transactions" (sets `upload_id = NULL`, rows become like manual entries). Recommendation: not now — the stated need is full removal, and a detach option makes the confirm flow two-step.
-3. **Safety backup?** Before each delete, copy `data/finance.db` to `data/backups/finance-<timestamp>-upload-<id>.db` (gitignored, keep last N). Cheap insurance for an irreversible action. Recommendation: yes if low effort; otherwise defer.
+1. ~~**Settled rows — warn or block?**~~ **Decided (2026-11-01): warn.** Deletion is allowed; the confirm dialog states the settled count.
+2. ~~**Detach option?**~~ **Decided (2026-11-01): no.** The dialog offers only confirm full delete / cancel.
+3. ~~**Safety backup?**~~ **Decided (2026-11-01): back-office backup only.** Every delete snapshots the DB first (see §5.1); keep the newest 10. There is **no restore entry point in the app** — no button, no route, no UI mention. Restore is manual:
+   1. Stop the app.
+   2. `cp data/backups/<chosen-backup>.db data/finance.db`
+   3. Start the app.
+
+   Restoring rewinds the **whole** database to that moment, so any work done after that delete is lost too.
 
 ---
 
@@ -173,4 +180,5 @@ Update `CLAUDE.md`: `delete_upload` in db.py list, route table row for `DELETE /
 - [ ] Coverage cell for that `(account, month)` shows missing afterwards; re-uploading the same PDF gives no duplicate warning.
 - [ ] Cancelling the dialog changes nothing.
 - [ ] Review-modal Discard still works.
+- [ ] Each delete writes a backup to `data/backups/` first; only the newest 10 are kept; a failed backup aborts the delete.
 - [ ] Tests in §5.4 pass; `CLAUDE.md` updated.
