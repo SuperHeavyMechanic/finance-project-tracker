@@ -246,10 +246,6 @@
     .dash-toast-undo { background: none; border: none; cursor: pointer; color: var(--accent-on-dark); font-weight: 600; font-size: 13px; }
     /* display:flex above would defeat the hidden attribute on its own */
 .dash-tip[hidden], .dash-toast[hidden] { display: none; }
-    .btn-danger-outline { background: var(--surface); color: var(--danger); border: 1px solid var(--danger-soft-border); }
-    @media (hover: hover) {
-      .btn-danger-outline:hover { background: var(--danger-soft); }
-    }
 
     /* Below the two-pane breakpoint the panes stack and stop pinning to the viewport. */
     @media (max-width: 1040px) {
@@ -2629,7 +2625,9 @@ async function loadStatements() {
             <span class="pending-badge">Pending Review</span>
             <button class="btn btn-sm btn-outline" style="margin-left:8px;font-size:11px;padding:4px 10px;" onclick="openReviewModal(${u.id})">Review →</button>
           ` : ''}
-          <button class="btn btn-sm btn-danger-outline" style="margin-left:${isPending ? 8 : 0}px;font-size:11px;padding:4px 10px;" onclick="deleteStatement(${u.id})">Delete</button>
+          <button class="btn-del" style="margin-left:${isPending ? 8 : 0}px;vertical-align:middle;" onclick="deleteStatement(${u.id})" title="Delete statement" aria-label="Delete statement">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          </button>
         </td>
       </tr>`;
     }).join('');
@@ -2640,7 +2638,7 @@ async function loadStatements() {
           <th>Statement</th><th>Filename</th><th>Uploaded</th>
           <th style="text-align:right">Extracted</th>
           <th style="text-align:right">Active</th>
-          <th>Status</th>
+          <th>Action</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table></div></div>

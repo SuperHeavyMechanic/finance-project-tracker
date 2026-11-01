@@ -138,7 +138,7 @@ POST /api/transactions  (manual entry path)
 Statement files live only while a review is pending — `data/statements/` is empty whenever
 nothing is awaiting review (confirm/discard delete the file; `init_db()` sweeps orphans).
 
-Any statement row on the Statements page — pending or confirmed — has a **Delete** button
+Any statement row on the Statements page — pending or confirmed — has a **trash-icon** button
 (`deleteStatement(uploadId)`). The native confirm spells out the transaction count/total and,
 when non-zero, how many rows are settled (`settled_count`) or have an outstanding settlement
 (`outstanding_settle_count`) — both returned per upload by `get_statements()`. Confirming calls
