@@ -36,6 +36,27 @@ BNI credit card — bank-specific extraction notes:
     'Mandiri': "",
     'Jenius': "",
 
+    'HSBC': """\
+HSBC credit card — bank-specific extraction notes:
+- The text is printed with most spaces removed; insert spaces so descriptions read normally (e.g. "SHOPEEjakartaID" → "SHOPEE Jakarta")
+- Each row starts with two dates run together, both DDMON with no year: first "Tanggal Pembukuan" (posted), then "Tanggal Transaksi" (transaction). "21SEP20SEP" = posted 21 Sep, transacted 20 Sep. Always use the SECOND one (Tanggal Transaksi)
+- date: convert to DD/MM/YYYY. The year is the statement_date's year, except when the month is later than the statement_date's month — then it is the previous year (a DEC row on a JAN statement)
+- statement_date: the "Tanggal Cetak Tagihan" — the first date in the header, printed like "20OCT2026" — converted to DD/MM/YYYY (e.g. "20/10/2026"). Do NOT use "Tanggal Jatuh Tempo" (the second header date, the payment due date)
+- Amounts use a comma as the THOUSANDS separator: "1,000,000" is one million rupiah, "992,500" is 992500. There are no decimals
+- Amounts ending in "CR" are credits (payments, fee waivers, refunds): make the amount NEGATIVE and set is_real_expense false. Example: "3,126,382CR" → -3126382
+- The 16-digit card number and the cardholder's name may be glued in front of a description (e.g. "<card number><CARDHOLDER NAME>AnnualFeeWaiveRetentionProg"); drop them and keep only the description ("Annual Fee Waive Retention Prog")
+- Skip the "Total Credit used as of Last Statement" row and the "*****TRANSACTION SUMMARY*****" block — they are not transactions""",
+
+    'UOB': """\
+UOB credit card (TMRW) — bank-specific extraction notes:
+- Each row has two dates, DD MON with no year and Indonesian month abbreviations (JAN, FEB, MAR, APR, MEI, JUN, JUL, AGS/AGU, SEP, OKT, NOP, DES): first "Tanggal Transaksi" (transaction), then "Tanggal Pembukuan" (posted). Always use the FIRST one (Tanggal Transaksi)
+- date: convert to DD/MM/YYYY. The year is the statement_date's year, except when the month is later than the statement_date's month — then it is the previous year
+- statement_date: the "Tanggal Pencetakan" value in the header (e.g. "18 OKT 2026"), converted to DD/MM/YYYY ("18/10/2026"). Do NOT use "Tanggal Jatuh Tempo" (payment due date)
+- Amounts use a comma as the THOUSANDS separator: "299,376" is 299376. There are no decimals
+- Payments and credits (rows marked CR, or "PEMBAYARAN" rows) get a NEGATIVE amount and is_real_expense false
+- Skip "TAGIHAN BULAN LALU", "SUB TOTAL TAGIHAN BULAN INI" and "TOTAL TAGIHAN ... BULAN INI" rows — they are balances, not transactions
+- Description: merchant name only; strip the trailing city (e.g. "GRANDLUCKY PIK JAKARTA UTARA" → "GRANDLUCKY PIK")""",
+
     'Maybank': """\
 Maybank credit card — bank-specific extraction notes:
 - Dates are printed as DD-MM-YY (e.g. "23-04-26"); keep this exact format in the date field — do NOT convert

@@ -58,15 +58,20 @@ SEED_ACCOUNTS = [
 _MONTH_MAP = {
     'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
     'may': '05', 'mei': '05', 'jun': '06', 'jul': '07',
-    'aug': '08', 'agt': '08', 'sep': '09', 'oct': '10',
-    'okt': '10', 'nov': '11', 'dec': '12', 'des': '12',
+    'aug': '08', 'agt': '08', 'agu': '08', 'ags': '08', 'sep': '09', 'oct': '10',
+    'okt': '10', 'nov': '11', 'nop': '11', 'dec': '12', 'des': '12',
 }
 
 _ALLOWED_ACCOUNT_FIELDS = frozenset({'owner', 'name', 'bank', 'last_four', 'account_type'})
 _ALLOWED_TX_FIELDS = frozenset({'category', 'is_real_expense', 'paid_by', 'ideal_paid_by', 'settled', 'settled_date', 'amount', 'date_parsed', 'description'})
 _ALLOWED_STAGED_FIELDS = frozenset({'category', 'description', 'amount', 'is_real_expense', 'ideal_paid_by'})
 
-def parse_date(s):
+def parse_date(s, ref_date=None):
+    """Normalise a bank date string to YYYY-MM-DD, or None if unrecognised.
+
+    ref_date (YYYY-MM-DD, normally the parsed statement date) supplies the year for
+    year-less dates like "20SEP" / "09 OKT" / "16/09": the statement's year, or the year before
+    when the month is later than the statement's (a December row on a January bill)."""
     if not s:
         return None
     s = s.strip()
@@ -80,11 +85,28 @@ def parse_date(s):
     if m:
         d, mo, y = m.groups()
         return f"20{y}-{mo.zfill(2)}-{d.zfill(2)}"
-    m = re.match(r'^(\d{1,2})[\s\-]([A-Za-z]{3})[\s\-](\d{2,4})$', s)
+    # Year-less DD/MM (Danamon prints rows as "16/09")
+    m = re.match(r'^(\d{1,2})/(\d{1,2})$', s)
+    if m and ref_date:
+        d, mo = m.groups()
+        mo = mo.zfill(2)
+        y = str(int(ref_date[:4]) - 1 if mo > ref_date[5:7] else int(ref_date[:4]))
+        return f"{y}-{mo}-{d.zfill(2)}"
+    # Month names, abbreviated or full, English or Indonesian, with or without
+    # separators: "20-Apr-26", "18 OKT 2026", "20OCT2026", "24 Agustus 2026", "21SEP"
+    m = re.match(r'^(\d{1,2})[\s\-]*([A-Za-z]{3,9})(?:[\s\-]*(\d{4}|\d{2}))?$', s)
     if m:
         d, mon, y = m.groups()
-        mo = _MONTH_MAP.get(mon.lower(), '01')
-        y = ('20' + y) if len(y) == 2 else y
+        mo = _MONTH_MAP.get(mon[:3].lower())
+        if not mo:
+            return None
+        if y:
+            y = ('20' + y) if len(y) == 2 else y
+        elif ref_date:
+            ref_y, ref_m = int(ref_date[:4]), ref_date[5:7]
+            y = str(ref_y - 1 if mo > ref_m else ref_y)
+        else:
+            return None
         return f"{y}-{mo}-{d.zfill(2)}"
     return None
 

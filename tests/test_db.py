@@ -88,6 +88,38 @@ class TestParseDate:
         # Indonesian December abbreviation
         assert db.parse_date("31-Des-26") == "2026-12-31"
 
+    def test_month_name_no_separator(self):
+        # HSBC statement date
+        assert db.parse_date("20OCT2026") == "2026-10-20"
+
+    def test_month_name_spaces_indonesian(self):
+        # UOB statement / due dates
+        assert db.parse_date("18 OKT 2026") == "2026-10-18"
+        assert db.parse_date("03 NOP 2026") == "2026-11-03"
+
+    def test_full_indonesian_month_name(self):
+        # Jenius statement date
+        assert db.parse_date("24 Agustus 2026") == "2026-08-24"
+
+    def test_unknown_month_returns_none(self):
+        # Previously defaulted silently to January
+        assert db.parse_date("15-Xyz-26") is None
+
+    def test_year_less_needs_ref_date(self):
+        assert db.parse_date("21SEP") is None
+
+    def test_year_less_takes_statement_year(self):
+        assert db.parse_date("21SEP", ref_date="2026-10-20") == "2026-09-21"
+        assert db.parse_date("09 OKT", ref_date="2026-10-18") == "2026-10-09"
+
+    def test_year_less_dd_mm(self):
+        # Danamon rows
+        assert db.parse_date("16/09", ref_date="2026-10-15") == "2026-09-16"
+        assert db.parse_date("16/09") is None
+
+    def test_year_less_rolls_back_across_new_year(self):
+        assert db.parse_date("28DEC", ref_date="2027-01-20") == "2026-12-28"
+
     def test_empty_string_returns_none(self):
         assert db.parse_date("") is None
 

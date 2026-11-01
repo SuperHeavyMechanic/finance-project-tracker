@@ -1182,6 +1182,14 @@ function fmtDateObj(d) {
   return `${String(d.getDate()).padStart(2,'0')}-${MONTHS_SHORT[d.getMonth()]}-${String(d.getFullYear()).slice(2)}`;
 }
 
+// Mirrors db._MONTH_MAP (English + Indonesian abbreviations)
+const STMT_MONTH_MAP = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', mei: '05', jun: '06', jul: '07',
+  aug: '08', agt: '08', agu: '08', ags: '08', sep: '09', oct: '10', okt: '10',
+  nov: '11', nop: '11', dec: '12', des: '12',
+};
+const STMT_MONTH_NAME_RE = /^(\d{1,2})[\s-]*([A-Za-z]{3,9})[\s-]*(\d{4}|\d{2})$/;
+
 function parseStatementDateLabel(statementDate, statementMonth) {
   if (statementDate) {
     let d;
@@ -1193,6 +1201,12 @@ function parseStatementDateLabel(statementDate, statementMonth) {
       // DD-MM-YYYY
       const [dd, mm, yyyy] = statementDate.split('-');
       d = new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T00:00:00`);
+    } else if (STMT_MONTH_NAME_RE.test(statementDate)) {
+      // Month names, as db.parse_date accepts: "18 OKT 2026", "20OCT2026", "24 Agustus 2026"
+      const [, dd, mon, yy] = statementDate.match(STMT_MONTH_NAME_RE);
+      const mm = STMT_MONTH_MAP[mon.slice(0, 3).toLowerCase()];
+      const yyyy = yy.length === 2 ? '20' + yy : yy;
+      if (mm) d = new Date(`${yyyy}-${mm}-${dd.padStart(2,'0')}T00:00:00`);
     } else {
       // DD-Mmm-YY, ISO, or other — try direct parse
       d = new Date(statementDate + 'T00:00:00');

@@ -288,10 +288,11 @@ def api_upload():
                 statement_date = parsed.get('statement_date')
 
         apply_rules(extracted, account_name)
-        for t in extracted:
-            t['date_parsed'] = parse_date(t.get('date', ''))
-
         parsed_sd = parse_date(statement_date) if statement_date else None
+        for t in extracted:
+            # Statement date supplies the year when a bank prints rows as "20SEP"
+            t['date_parsed'] = parse_date(t.get('date', ''), ref_date=parsed_sd)
+
         stmt_month = parsed_sd[:7] if parsed_sd else _dominant_month(extracted)
         if stmt_month and check_duplicate(account_id, stmt_month):
             return jsonify({
